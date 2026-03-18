@@ -1,60 +1,22 @@
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 
-// ─── FIREBASE CONFIG ───
-// To enable real-time shared data across your team:
-// 1. Go to https://console.firebase.google.com
-// 2. Create a free project (e.g., "heytutor-rfp-tracker")
-// 3. Go to Build > Realtime Database > Create Database > Start in test mode
-// 4. Copy your database URL and paste it below
-// 5. Redeploy to Vercel
-
-const FIREBASE_DB_URL = "https://rfp-tracker-764af-default-rtdb.firebaseio.com";
-
-// ─── Storage Layer (Firebase if configured, localStorage fallback) ───
-const STORAGE_KEY = "heytutor-rfps";
-
-async function loadRFPs() {
-  if (FIREBASE_DB_URL) {
-    try {
-      const res = await fetch(`${FIREBASE_DB_URL}/rfps.json`);
-      const data = await res.json();
-      return data ? Object.values(data) : [];
-    } catch (e) {
-      console.error("Firebase load error:", e);
-      return [];
-    }
-  }
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch { return []; }
-}
-
-async function saveRFPs(rfps) {
-  if (FIREBASE_DB_URL) {
-    try {
-      const map = {};
-      rfps.forEach(r => { map[r.id] = r; });
-      await fetch(`${FIREBASE_DB_URL}/rfps.json`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(map),
-      });
-    } catch (e) { console.error("Firebase save error:", e); }
-  }
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(rfps));
-  } catch (e) { console.error("Storage save error:", e); }
-}
-
-// ─── Brand ───
 const BRAND = {
-  deepPurple: "#4A1A6B", midPurple: "#6B2D9B", lightPurple: "#F3EBF9",
-  teal: "#00B4A6", tealDark: "#009688",
-  white: "#FFFFFF", offWhite: "#FAFAFA",
-  gray100: "#F5F5F5", gray200: "#E8E8E8", gray300: "#D1D1D1",
-  gray500: "#888", gray700: "#444", gray900: "#1a1a1a",
-  red: "#E53935", amber: "#F9A825", green: "#43A047",
+  deepPurple: "#4A1A6B",
+  midPurple: "#6B2D9B",
+  lightPurple: "#F3EBF9",
+  teal: "#00B4A6",
+  tealDark: "#009688",
+  white: "#FFFFFF",
+  offWhite: "#FAFAFA",
+  gray100: "#F5F5F5",
+  gray200: "#E8E8E8",
+  gray300: "#D1D1D1",
+  gray500: "#888",
+  gray700: "#444",
+  gray900: "#1a1a1a",
+  red: "#E53935",
+  amber: "#F9A825",
+  green: "#43A047",
 };
 
 const STATUS_CONFIG = {
@@ -66,21 +28,41 @@ const STATUS_CONFIG = {
   "Lost": { bg: "#FFEBEE", text: "#C62828", dot: BRAND.red },
 };
 
+// A required doc item: { id, label, url, checked }
+function makeDoc(label = "", url = "") {
+  return { id: Date.now().toString() + Math.random(), label, url, checked: false };
+}
+
 const INITIAL_FORM = {
-  districtName: "", rfpTitle: "", state: "", dueDate: "", dueTime: "",
-  status: "Not Started", contactName: "", contactEmail: "", contactPhone: "",
-  contactRole: "", submissionMethod: "", submissionUrl: "", submissionNotes: "",
-  guidelines: "", requiredDocs: "", signaturesNeeded: "", estimatedValue: "", notes: "",
+  districtName: "",
+  rfpTitle: "",
+  state: "",
+  dueDate: "",
+  dueTime: "",
+  status: "Not Started",
+  contactName: "",
+  contactEmail: "",
+  contactPhone: "",
+  contactRole: "",
+  submissionMethod: "",
+  submissionUrl: "",
+  submissionNotes: "",
+  guidelines: "",
+  requiredDocs: [],   // now an array of doc objects
+  signaturesNeeded: "",
+  estimatedValue: "",
+  notes: "",
 };
 
 function getDaysUntil(dateStr) {
   if (!dateStr) return null;
   const due = new Date(dateStr + "T23:59:59");
-  return Math.ceil((due - new Date()) / (1000 * 60 * 60 * 24));
+  const now = new Date();
+  return Math.ceil((due - now) / (1000 * 60 * 60 * 24));
 }
 
 function getUrgencyTag(dateStr, status) {
-  if (["Submitted", "Won", "Lost"].includes(status)) return null;
+  if (status === "Submitted" || status === "Won" || status === "Lost") return null;
   const days = getDaysUntil(dateStr);
   if (days === null) return null;
   if (days < 0) return { label: "OVERDUE", color: BRAND.red, bg: "#FFEBEE" };
@@ -97,7 +79,38 @@ function formatDate(dateStr) {
   });
 }
 
+// Migrate old string requiredDocs to array format
+function normalizeForm(form) {
+  if (typeof form.requiredDocs === "string") {
+    const lines = form.requiredDocs.split("\n").filter(l => l.trim());
+    return {
+      ...form,
+      requiredDocs: lines.length > 0 ? lines.map(l => makeDoc(l.trim())) : [],
+    };
+  }
+  return form;
+}
+
+// ─── Persistent Storage Helpers ───
+const STORAGE_KEY = "heytutor-rfps";
+
+async function loadRFPs() {
+  try {
+    const result = await window.storage.get(STORAGE_KEY);
+    if (!result) return [];
+    const parsed = JSON.parse(result.value);
+    return parsed.map(normalizeForm);
+  } catch { return []; }
+}
+
+async function saveRFPs(rfps) {
+  try {
+    await window.storage.set(STORAGE_KEY, JSON.stringify(rfps));
+  } catch (e) { console.error("Storage save error:", e); }
+}
+
 // ─── Components ───
+
 function Badge({ children, bg, color, style }) {
   return (
     <span style={{
@@ -179,8 +192,139 @@ function Button({ children, onClick, variant = "primary", style, disabled }) {
   );
 }
 
+// ─── Required Docs Checklist Editor (used in Form) ───
+function DocChecklistEditor({ docs, onChange }) {
+  const add = () => onChange([...docs, makeDoc()]);
+  const remove = (id) => onChange(docs.filter(d => d.id !== id));
+  const update = (id, field, val) => onChange(docs.map(d => d.id === id ? { ...d, [field]: val } : d));
+
+  return (
+    <div>
+      <div style={{ fontSize: 12, fontWeight: 600, color: BRAND.gray700, letterSpacing: 0.3, marginBottom: 8 }}>
+        Required Documents
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {docs.map((doc) => (
+          <div key={doc.id} style={{
+            display: "grid", gridTemplateColumns: "auto 1fr 1fr auto",
+            gap: 8, alignItems: "center",
+            background: doc.checked ? "#F3EBF9" : BRAND.gray100,
+            borderRadius: 8, padding: "8px 10px",
+            border: `1px solid ${doc.checked ? BRAND.midPurple + "44" : BRAND.gray200}`,
+            transition: "all 0.2s",
+          }}>
+            {/* Checkbox */}
+            <input
+              type="checkbox"
+              checked={doc.checked}
+              onChange={e => update(doc.id, "checked", e.target.checked)}
+              style={{ width: 16, height: 16, cursor: "pointer", accentColor: BRAND.midPurple }}
+            />
+            {/* Label */}
+            <input
+              type="text"
+              value={doc.label}
+              onChange={e => update(doc.id, "label", e.target.value)}
+              placeholder="Document name (e.g. W-9)"
+              style={{
+                padding: "6px 10px", border: `1px solid ${BRAND.gray300}`, borderRadius: 6,
+                fontSize: 13, fontFamily: "'DM Sans', sans-serif", outline: "none",
+                background: BRAND.white, textDecoration: doc.checked ? "line-through" : "none",
+                color: doc.checked ? BRAND.gray500 : BRAND.gray900,
+              }}
+              onFocus={e => e.target.style.borderColor = BRAND.midPurple}
+              onBlur={e => e.target.style.borderColor = BRAND.gray300}
+            />
+            {/* URL */}
+            <input
+              type="url"
+              value={doc.url}
+              onChange={e => update(doc.id, "url", e.target.value)}
+              placeholder="Link (optional)"
+              style={{
+                padding: "6px 10px", border: `1px solid ${BRAND.gray300}`, borderRadius: 6,
+                fontSize: 13, fontFamily: "'DM Sans', sans-serif", outline: "none",
+                background: BRAND.white, color: BRAND.teal,
+              }}
+              onFocus={e => e.target.style.borderColor = BRAND.midPurple}
+              onBlur={e => e.target.style.borderColor = BRAND.gray300}
+            />
+            {/* Remove */}
+            <button onClick={() => remove(doc.id)} style={{
+              background: "none", border: "none", cursor: "pointer",
+              color: BRAND.gray500, fontSize: 16, lineHeight: 1, padding: "0 4px",
+            }} title="Remove">×</button>
+          </div>
+        ))}
+      </div>
+      <button onClick={add} style={{
+        marginTop: 10, padding: "7px 14px", borderRadius: 7, fontSize: 13,
+        fontWeight: 600, fontFamily: "'DM Sans', sans-serif", cursor: "pointer",
+        background: BRAND.lightPurple, color: BRAND.midPurple,
+        border: `1.5px dashed ${BRAND.midPurple}`, transition: "all 0.2s",
+      }}>+ Add Document</button>
+    </div>
+  );
+}
+
+// ─── Required Docs Checklist Display (used in Detail panel) ───
+function DocChecklistDisplay({ docs, onToggle }) {
+  if (!docs || docs.length === 0) return <div style={{ fontSize: 13, color: BRAND.gray500 }}>No documents listed.</div>;
+  const completed = docs.filter(d => d.checked).length;
+  const pct = Math.round((completed / docs.length) * 100);
+
+  return (
+    <div>
+      {/* Progress bar */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+        <div style={{ flex: 1, height: 6, background: BRAND.gray200, borderRadius: 99, overflow: "hidden" }}>
+          <div style={{
+            width: `${pct}%`, height: "100%", borderRadius: 99,
+            background: pct === 100 ? BRAND.green : BRAND.midPurple,
+            transition: "width 0.3s ease",
+          }} />
+        </div>
+        <span style={{ fontSize: 12, fontWeight: 600, color: pct === 100 ? BRAND.green : BRAND.midPurple, whiteSpace: "nowrap" }}>
+          {completed}/{docs.length} done
+        </span>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {docs.map(doc => (
+          <div key={doc.id} style={{
+            display: "flex", alignItems: "center", gap: 10,
+            padding: "8px 12px", borderRadius: 8,
+            background: doc.checked ? "#F3EBF9" : BRAND.gray100,
+            border: `1px solid ${doc.checked ? BRAND.midPurple + "44" : BRAND.gray200}`,
+            transition: "all 0.2s",
+          }}>
+            <input
+              type="checkbox"
+              checked={doc.checked}
+              onChange={() => onToggle(doc.id)}
+              style={{ width: 16, height: 16, cursor: "pointer", accentColor: BRAND.midPurple, flexShrink: 0 }}
+            />
+            <span style={{
+              fontSize: 13, flex: 1,
+              textDecoration: doc.checked ? "line-through" : "none",
+              color: doc.checked ? BRAND.gray500 : BRAND.gray900,
+            }}>{doc.label || <em style={{ color: BRAND.gray500 }}>Unnamed document</em>}</span>
+            {doc.url && (
+              <a href={doc.url} target="_blank" rel="noreferrer" style={{
+                fontSize: 12, color: BRAND.teal, fontWeight: 600, whiteSpace: "nowrap",
+                textDecoration: "none", padding: "2px 8px", borderRadius: 5,
+                background: "#E0F7F6", flexShrink: 0,
+              }}>🔗 Open</a>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── RFP Detail Panel ───
-function RFPDetail({ rfp, onClose, onEdit, onDelete }) {
+function RFPDetail({ rfp, onClose, onEdit, onDelete, onToggleDoc }) {
   const urgency = getUrgencyTag(rfp.dueDate, rfp.status);
   const section = (title, children) => (
     <div style={{ marginBottom: 24 }}>
@@ -214,7 +358,7 @@ function RFPDetail({ rfp, onClose, onEdit, onDelete }) {
               <div style={{ fontSize: 22, fontWeight: 700, color: BRAND.deepPurple, lineHeight: 1.2 }}>{rfp.districtName}</div>
               <div style={{ fontSize: 14, color: BRAND.gray500, marginTop: 4 }}>{rfp.rfpTitle}</div>
             </div>
-            <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: BRAND.gray500, padding: 4 }}>✕</button>
+            <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: BRAND.gray500 }}>✕</button>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 24 }}>
             <StatusDot status={rfp.status} />
@@ -252,21 +396,19 @@ function RFPDetail({ rfp, onClose, onEdit, onDelete }) {
                   padding: 12, borderRadius: 8, lineHeight: 1.6 }}>{rfp.guidelines}</div>
               </div>
             )}
-            {rfp.requiredDocs && (
-              <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 12, color: BRAND.gray500, fontWeight: 600, marginBottom: 4 }}>Required Documents:</div>
-                <div style={{ fontSize: 13, color: BRAND.gray700, whiteSpace: "pre-wrap", background: BRAND.gray100,
-                  padding: 12, borderRadius: 8, lineHeight: 1.6 }}>{rfp.requiredDocs}</div>
-              </div>
-            )}
-            {rfp.signaturesNeeded && (
-              <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 12, color: BRAND.gray500, fontWeight: 600, marginBottom: 4 }}>Signatures Needed:</div>
-                <div style={{ fontSize: 13, color: BRAND.gray700, whiteSpace: "pre-wrap", background: BRAND.gray100,
-                  padding: 12, borderRadius: 8, lineHeight: 1.6 }}>{rfp.signaturesNeeded}</div>
-              </div>
-            )}
           </>)}
+
+          {section("Required Documents", (
+            <DocChecklistDisplay
+              docs={rfp.requiredDocs || []}
+              onToggle={(docId) => onToggleDoc(rfp.id, docId)}
+            />
+          ))}
+
+          {rfp.signaturesNeeded && section("Signatures Needed", (
+            <div style={{ fontSize: 13, color: BRAND.gray700, whiteSpace: "pre-wrap", background: BRAND.gray100,
+              padding: 12, borderRadius: 8, lineHeight: 1.6 }}>{rfp.signaturesNeeded}</div>
+          ))}
 
           {rfp.notes && section("Notes", (
             <div style={{ fontSize: 13, color: BRAND.gray700, whiteSpace: "pre-wrap", background: BRAND.gray100,
@@ -275,7 +417,7 @@ function RFPDetail({ rfp, onClose, onEdit, onDelete }) {
 
           <div style={{ display: "flex", gap: 10, paddingBottom: 28, paddingTop: 8 }}>
             <Button variant="outline" onClick={onEdit}>Edit RFP</Button>
-            <Button variant="danger" onClick={() => { if (window.confirm("Delete this RFP?")) onDelete(rfp.id); }}>Delete</Button>
+            <Button variant="danger" onClick={() => { if (confirm("Delete this RFP?")) onDelete(rfp.id); }}>Delete</Button>
           </div>
         </div>
       </div>
@@ -285,7 +427,7 @@ function RFPDetail({ rfp, onClose, onEdit, onDelete }) {
 
 // ─── RFP Form Modal ───
 function RFPForm({ rfp, onSave, onClose }) {
-  const [form, setForm] = useState(rfp || INITIAL_FORM);
+  const [form, setForm] = useState(() => normalizeForm(rfp || INITIAL_FORM));
   const set = (key) => (e) => setForm(f => ({ ...f, [key]: e.target.value }));
   const valid = form.districtName && form.rfpTitle;
   const grid2 = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 };
@@ -351,8 +493,14 @@ function RFPForm({ rfp, onSave, onClose }) {
           <Input label="Estimated Contract Value" value={form.estimatedValue} onChange={set("estimatedValue")} placeholder="e.g. $250,000" />
           <Input label="Proposal Guidelines" value={form.guidelines} onChange={set("guidelines")} textarea
             placeholder="Page limits, formatting rules, required sections..." style={{ marginTop: 14 }} />
-          <Input label="Required Documents" value={form.requiredDocs} onChange={set("requiredDocs")} textarea
-            placeholder="W-9, insurance certificate, references, budget template..." style={{ marginTop: 14 }} />
+
+          <div style={{ marginTop: 14 }}>
+            <DocChecklistEditor
+              docs={form.requiredDocs || []}
+              onChange={(docs) => setForm(f => ({ ...f, requiredDocs: docs }))}
+            />
+          </div>
+
           <Input label="Signatures Needed" value={form.signaturesNeeded} onChange={set("signaturesNeeded")} textarea
             placeholder="CEO signature on cover letter, notarized affidavit..." style={{ marginTop: 14 }} />
 
@@ -380,6 +528,9 @@ function RFPForm({ rfp, onSave, onClose }) {
 function RFPCard({ rfp, onClick }) {
   const urgency = getUrgencyTag(rfp.dueDate, rfp.status);
   const [hover, setHover] = useState(false);
+  const docs = rfp.requiredDocs || [];
+  const checkedCount = docs.filter(d => d.checked).length;
+
   return (
     <div onClick={onClick}
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
@@ -410,6 +561,25 @@ function RFPCard({ rfp, onClick }) {
       {rfp.submissionMethod && (
         <div style={{ fontSize: 12, color: BRAND.gray500, marginTop: 8, display: "flex", alignItems: "center", gap: 4 }}>
           <span style={{ fontSize: 14 }}>📨</span> {rfp.submissionMethod}
+        </div>
+      )}
+      {/* Doc progress mini-bar on card */}
+      {docs.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+            <span style={{ fontSize: 11, color: BRAND.gray500 }}>Docs</span>
+            <span style={{ fontSize: 11, color: checkedCount === docs.length ? BRAND.green : BRAND.midPurple, fontWeight: 600 }}>
+              {checkedCount}/{docs.length}
+            </span>
+          </div>
+          <div style={{ height: 4, background: BRAND.gray200, borderRadius: 99, overflow: "hidden" }}>
+            <div style={{
+              width: `${Math.round((checkedCount / docs.length) * 100)}%`,
+              height: "100%", borderRadius: 99,
+              background: checkedCount === docs.length ? BRAND.green : BRAND.midPurple,
+              transition: "width 0.3s",
+            }} />
+          </div>
         </div>
       )}
     </div>
@@ -445,34 +615,8 @@ function SummaryCards({ rfps }) {
   );
 }
 
-// ─── Export / Import ───
-function exportData(rfps) {
-  const blob = new Blob([JSON.stringify(rfps, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `heytutor-rfps-backup-${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function importData(file, setRfps, setLoaded) {
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    try {
-      const data = JSON.parse(e.target.result);
-      if (Array.isArray(data)) {
-        setRfps(data);
-        setLoaded(true);
-        alert(`Imported ${data.length} RFPs successfully.`);
-      }
-    } catch { alert("Invalid file. Please select a valid JSON backup."); }
-  };
-  reader.readAsText(file);
-}
-
 // ─── Main App ───
-export default function App() {
+export default function HeyTutorRFPTracker() {
   const [rfps, setRfps] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [view, setView] = useState(null);
@@ -480,25 +624,15 @@ export default function App() {
   const [filter, setFilter] = useState("All");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("dueDate");
-  const [showMenu, setShowMenu] = useState(false);
 
-  // Load on mount + poll for Firebase changes
-  useEffect(() => {
-    loadRFPs().then(data => { setRfps(data); setLoaded(true); });
-    if (FIREBASE_DB_URL) {
-      const interval = setInterval(() => {
-        loadRFPs().then(data => { if (data) setRfps(data); });
-      }, 5000); // Refresh every 5 seconds for team sync
-      return () => clearInterval(interval);
-    }
-  }, []);
-
+  useEffect(() => { loadRFPs().then(data => { setRfps(data); setLoaded(true); }); }, []);
   useEffect(() => { if (loaded) saveRFPs(rfps); }, [rfps, loaded]);
 
   const handleSave = useCallback((form) => {
     if (editing && editing !== "new") {
-      setRfps(prev => prev.map(r => r.id === editing.id ? { ...form, id: editing.id } : r));
-      setView({ ...form, id: editing.id });
+      const updated = { ...form, id: editing.id };
+      setRfps(prev => prev.map(r => r.id === editing.id ? updated : r));
+      setView(updated);
     } else {
       const newRfp = { ...form, id: Date.now().toString() };
       setRfps(prev => [...prev, newRfp]);
@@ -509,6 +643,20 @@ export default function App() {
   const handleDelete = useCallback((id) => {
     setRfps(prev => prev.filter(r => r.id !== id));
     setView(null);
+  }, []);
+
+  // Toggle a doc's checked state directly from the detail panel
+  const handleToggleDoc = useCallback((rfpId, docId) => {
+    setRfps(prev => prev.map(r => {
+      if (r.id !== rfpId) return r;
+      const updatedDocs = (r.requiredDocs || []).map(d =>
+        d.id === docId ? { ...d, checked: !d.checked } : d
+      );
+      const updated = { ...r, requiredDocs: updatedDocs };
+      // Keep view in sync
+      setView(v => v && v.id === rfpId ? updated : v);
+      return updated;
+    }));
   }, []);
 
   const filtered = rfps
@@ -530,7 +678,12 @@ export default function App() {
     });
 
   return (
-    <div style={{ fontFamily: "'DM Sans', 'Segoe UI', sans-serif", minHeight: "100vh", background: BRAND.offWhite }}>
+    <div style={{
+      fontFamily: "'DM Sans', 'Segoe UI', sans-serif",
+      minHeight: "100vh", background: BRAND.offWhite,
+    }}>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
       {/* Header */}
       <div style={{
         background: `linear-gradient(135deg, ${BRAND.deepPurple} 0%, ${BRAND.midPurple} 100%)`,
@@ -542,46 +695,11 @@ export default function App() {
               <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: -0.5 }}>
                 <span style={{ color: BRAND.teal }}>Hey</span>Tutor RFP Tracker
               </div>
-              <div style={{ fontSize: 13, opacity: 0.7, marginTop: 2 }}>
-                Manage proposals, deadlines & submissions
-                {FIREBASE_DB_URL && <span style={{ marginLeft: 8, background: "rgba(0,180,166,0.3)", padding: "2px 8px", borderRadius: 10, fontSize: 11 }}>🟢 Live Sync</span>}
-              </div>
+              <div style={{ fontSize: 13, opacity: 0.7, marginTop: 2 }}>Manage proposals, deadlines & submissions</div>
             </div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <div style={{ position: "relative" }}>
-                <Button variant="outline" onClick={() => setShowMenu(!showMenu)}
-                  style={{ color: BRAND.white, borderColor: "rgba(255,255,255,0.3)", padding: "8px 14px", fontSize: 13 }}>
-                  ⋮ More
-                </Button>
-                {showMenu && (
-                  <div style={{
-                    position: "absolute", top: "100%", right: 0, marginTop: 4,
-                    background: BRAND.white, borderRadius: 10, boxShadow: "0 8px 30px rgba(0,0,0,0.15)",
-                    padding: 6, minWidth: 180, zIndex: 100,
-                  }}>
-                    <button onClick={() => { exportData(rfps); setShowMenu(false); }}
-                      style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 14px",
-                        border: "none", background: "none", cursor: "pointer", fontSize: 13,
-                        fontFamily: "'DM Sans'", borderRadius: 6, color: BRAND.gray700 }}
-                      onMouseEnter={e => e.target.style.background = BRAND.gray100}
-                      onMouseLeave={e => e.target.style.background = "none"}>
-                      📥 Export Backup (JSON)
-                    </button>
-                    <label style={{ display: "block", padding: "10px 14px", cursor: "pointer", fontSize: 13,
-                      fontFamily: "'DM Sans'", borderRadius: 6, color: BRAND.gray700 }}
-                      onMouseEnter={e => e.target.style.background = BRAND.gray100}
-                      onMouseLeave={e => e.target.style.background = "transparent"}>
-                      📤 Import Backup
-                      <input type="file" accept=".json" style={{ display: "none" }}
-                        onChange={e => { if (e.target.files[0]) { importData(e.target.files[0], setRfps, setLoaded); setShowMenu(false); } }} />
-                    </label>
-                  </div>
-                )}
-              </div>
-              <Button variant="teal" onClick={() => setEditing("new")} style={{ fontWeight: 700 }}>
-                + New RFP
-              </Button>
-            </div>
+            <Button variant="teal" onClick={() => setEditing("new")} style={{ fontWeight: 700 }}>
+              + New RFP
+            </Button>
           </div>
         </div>
       </div>
@@ -627,7 +745,7 @@ export default function App() {
               {rfps.length === 0 ? "No RFPs yet" : "No matches found"}
             </div>
             <div style={{ fontSize: 13 }}>
-              {rfps.length === 0 ? 'Click "+ New RFP" to start tracking your first proposal.' : "Try adjusting your filters or search."}
+              {rfps.length === 0 ? "Click \"+ New RFP\" to start tracking your first proposal." : "Try adjusting your filters or search."}
             </div>
           </div>
         ) : (
@@ -642,15 +760,13 @@ export default function App() {
       {/* Modals */}
       {view && !editing && (
         <RFPDetail rfp={view} onClose={() => setView(null)}
-          onEdit={() => setEditing(view)} onDelete={handleDelete} />
+          onEdit={() => setEditing(view)} onDelete={handleDelete}
+          onToggleDoc={handleToggleDoc} />
       )}
       {editing && (
         <RFPForm rfp={editing === "new" ? null : editing}
           onSave={handleSave} onClose={() => setEditing(null)} />
       )}
-
-      {/* Click outside to close menu */}
-      {showMenu && <div style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={() => setShowMenu(false)} />}
     </div>
   );
 }
