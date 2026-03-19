@@ -102,8 +102,7 @@ const INITIAL_FORM = {
   preBidLink: "",
   questionsForDistrict: "",
   rfpAuthor: "",
-  rfpFileName: "",
-  rfpFileData: "",
+  rfpDocLink: "",
   serviceType: "",
   subjects: [],
   gradeLevels: [],
@@ -281,50 +280,7 @@ function AEToggle({ aeRequired, aeName, onToggle, onNameChange }) {
   );
 }
 
-function FileUpload({ label, fileName, onFileSelect, onClear }) {
-  const handleClick = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".pdf,.doc,.docx,.xlsx,.xls,.zip";
-    input.onchange = (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (ev) => onFileSelect(file.name, ev.target.result);
-        reader.readAsDataURL(file);
-      }
-    };
-    input.click();
-  };
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <span style={{ fontSize: 12, fontWeight: 600, color: BRAND.gray700, letterSpacing: 0.3 }}>{label}</span>
-      {fileName ? (
-        <div style={{
-          display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
-          border: `1.5px solid ${BRAND.teal}`, borderRadius: 8, background: "#E0F2F1",
-        }}>
-          <span style={{ fontSize: 18 }}>📄</span>
-          <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: BRAND.tealDark,
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{fileName}</span>
-          <button onClick={onClear} style={{
-            background: "none", border: "none", color: BRAND.red, fontSize: 16,
-            cursor: "pointer", fontWeight: 700, padding: "0 4px",
-          }}>✕</button>
-        </div>
-      ) : (
-        <button onClick={handleClick} style={{
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-          padding: "14px", borderRadius: 8, border: `2px dashed ${BRAND.gray300}`,
-          background: BRAND.gray100, cursor: "pointer",
-          fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: BRAND.gray500,
-        }}>
-          <span style={{ fontSize: 20 }}>📁</span> Upload RFP Document
-        </button>
-      )}
-    </div>
-  );
-}
+// (File upload removed — use rfpDocLink instead)
 
 function RequiredDocsChecklist({ docs, onChange }) {
   const safeD = Array.isArray(docs) ? docs : [];
@@ -549,21 +505,11 @@ function RFPDetail({ rfp, onClose, onEdit, onDelete }) {
             )}
             {field("RFP Author / Owner", rfp.rfpAuthor)}
             {rfp.aeRequired && field("Account Executive", rfp.aeName || "TBD")}
-            {rfp.rfpFileName && (
-              <div style={{ marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+            {rfp.rfpDocLink && (
+              <div style={{ marginBottom: 8 }}>
                 <span style={{ fontSize: 12, color: BRAND.gray500, fontWeight: 600 }}>RFP Document: </span>
-                <Badge bg="#E0F2F1" color={BRAND.tealDark}
-                  style={{ cursor: rfp.rfpFileData ? "pointer" : "default" }}
-                  onClick={() => {
-                    if (rfp.rfpFileData) {
-                      const a = document.createElement("a");
-                      a.href = rfp.rfpFileData;
-                      a.download = rfp.rfpFileName;
-                      a.click();
-                    }
-                  }}>
-                  📄 {rfp.rfpFileName}
-                </Badge>
+                <a href={rfp.rfpDocLink} target="_blank" rel="noreferrer"
+                  style={{ fontSize: 14, color: BRAND.teal, wordBreak: "break-all" }}>🔗 Open Document</a>
               </div>
             )}
           </>)}
@@ -725,12 +671,8 @@ function RFPForm({ rfp, onSave, onClose }) {
           </div>
 
           <div style={{ marginTop: 14 }}>
-            <FileUpload
-              label="Upload RFP Document"
-              fileName={form.rfpFileName}
-              onFileSelect={(name, data) => setForm(f => ({ ...f, rfpFileName: name, rfpFileData: data }))}
-              onClear={() => setForm(f => ({ ...f, rfpFileName: "", rfpFileData: "" }))}
-            />
+            <Input label="RFP Document Link" value={form.rfpDocLink} onChange={set("rfpDocLink")}
+              placeholder="Paste Google Drive, Dropbox, or any link to the RFP document" />
           </div>
 
           {/* Scope of Work */}
