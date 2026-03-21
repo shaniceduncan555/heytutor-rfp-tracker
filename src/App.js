@@ -110,6 +110,8 @@ const INITIAL_FORM = {
   // AE fields
   aeRequired: false,
   aeName: "",
+  // Fit Review
+  fitReview: null,
 };
 
 function getDaysUntil(dateStr) {
@@ -398,6 +400,396 @@ function Button({ children, onClick, variant = "primary", style, disabled }) {
   );
 }
 
+
+// ─── Fit Review Constants ───
+const FIT_SECTIONS = [
+  {
+    key: "strategic",
+    label: "Strategic Fit",
+    shortLabel: "Strategic Fit",
+    maxScore: 20,
+    purpose: "Does this opportunity align with what the company actually wants to pursue?",
+    questions: [
+      { key: "s1", label: "Alignment with core services", hint: "1 = outside our main offerings · 3 = somewhat aligned · 5 = direct fit" },
+      { key: "s2", label: "Student population / grade band match", hint: "1 = little experience · 3 = some relevant experience · 5 = strong proven experience" },
+      { key: "s3", label: "Target market & buyer profile fit", hint: "1 = not a target customer · 3 = adjacent · 5 = ideal customer profile" },
+      { key: "s4", label: "Geographic / delivery model fit", hint: "1 = difficult geography · 3 = possible with effort · 5 = easy fit with current footprint" },
+    ],
+  },
+  {
+    key: "capability",
+    label: "Delivery Readiness",
+    shortLabel: "Delivery Readiness",
+    maxScore: 20,
+    purpose: "Can the company actually deliver what is being asked?",
+    questions: [
+      { key: "c1", label: "Confidence we can deliver the scope", hint: "1 = major gaps · 3 = partial fit, workarounds needed · 5 = fully capable as-is" },
+      { key: "c2", label: "Staffing capacity if awarded", hint: "1 = major staffing concerns · 3 = possible but tight · 5 = strong available capacity" },
+      { key: "c3", label: "Compliance & documentation readiness", hint: "1 = significant gaps · 3 = manageable with effort · 5 = already equipped" },
+      { key: "c4", label: "Realism of implementation timeline", hint: "1 = unrealistic · 3 = challenging but doable · 5 = very realistic" },
+    ],
+  },
+  {
+    key: "financial",
+    label: "Financial Value",
+    shortLabel: "Financial Value",
+    maxScore: 15,
+    purpose: "Is this worth the effort financially?",
+    questions: [
+      { key: "f1", label: "Contract value vs. effort required", hint: "1 = not worth the effort · 3 = acceptable · 5 = highly attractive" },
+      { key: "f2", label: "Margin potential", hint: "1 = margin risk is high · 3 = uncertain · 5 = margin potential looks strong" },
+      { key: "f3", label: "Reasonableness of pursuit & delivery costs", hint: "1 = expensive to pursue/deliver · 3 = manageable · 5 = low burden relative to value" },
+    ],
+  },
+  {
+    key: "win",
+    label: "Win Potential",
+    shortLabel: "Win Potential",
+    maxScore: 20,
+    purpose: "Even if you can do it, can you realistically win it?",
+    questions: [
+      { key: "w1", label: "Strength of relevant past performance", hint: "1 = weak/no relevant examples · 3 = somewhat relevant · 5 = strong directly relevant history" },
+      { key: "w2", label: "Differentiation for this buyer", hint: "1 = hard to stand out · 3 = some differentiators · 5 = strong clear advantages" },
+      { key: "w3", label: "Overall competitive positioning", hint: "1 = unlikely to win · 3 = possible · 5 = strong chance of winning" },
+      { key: "w4", label: "Ability to produce a strong response by deadline", hint: "1 = weak position · 3 = possible with pressure · 5 = very well positioned" },
+    ],
+  },
+  {
+    key: "risk",
+    label: "Risk Level",
+    shortLabel: "Risk Level",
+    maxScore: 20,
+    purpose: "What could make this opportunity painful or not worth it? (5 = low risk / very manageable)",
+    questions: [
+      { key: "r1", label: "Clarity and definition of scope", hint: "1 = vague and risky · 3 = somewhat clear · 5 = very clear" },
+      { key: "r2", label: "Manageability of compliance / admin burden", hint: "1 = very burdensome · 3 = moderate · 5 = very manageable" },
+      { key: "r3", label: "Turnaround time for a high-quality response", hint: "1 = very difficult timeline · 3 = tight but manageable · 5 = very manageable" },
+      { key: "r4", label: "Delivery risks if awarded", hint: "1 = high delivery risk · 3 = moderate risk · 5 = low risk" },
+    ],
+  },
+];
+
+const RED_FLAGS = [
+  { key: "rf1", label: "Are there mandatory requirements we cannot meet?" },
+  { key: "rf2", label: "Would pursuing this materially strain staffing or delivery capacity?" },
+  { key: "rf3", label: "Is the timeline too compressed to submit a strong proposal?" },
+];
+
+const TOTAL_MAX = 95;
+
+const RECOMMENDATION_CONFIG = {
+  "Go":               { bg: "#E8F5E9", color: "#2E7D32", border: "#A5D6A7", emoji: "✅" },
+  "Go with Caution":  { bg: "#FFF8E1", color: "#E65100", border: "#FFD54F", emoji: "⚠️" },
+  "No-Go":            { bg: "#FFEBEE", color: "#C62828", border: "#EF9A9A", emoji: "🚫" },
+};
+
+function getScoreBand(total, redFlagCount) {
+  if (redFlagCount >= 2) return { label: "No-Go", rec: "No-Go", statusLabel: "No-Go", statusBg: "#FFEBEE", statusColor: "#C62828" };
+  if (total >= 80) return { label: "Strong Fit",   rec: "Go",               statusLabel: "Strong Fit",   statusBg: "#E8F5E9", statusColor: "#2E7D32" };
+  if (total >= 65) return { label: "Moderate Fit", rec: "Go with Caution",  statusLabel: "Moderate Fit", statusBg: "#FFF8E1", statusColor: "#E65100" };
+  if (total >= 50) return { label: "Weak Fit",     rec: "Go with Caution",  statusLabel: "Weak Fit",     statusBg: "#FFF3E0", statusColor: "#F57C00" };
+  return              { label: "No-Go",            rec: "No-Go",            statusLabel: "No-Go",        statusBg: "#FFEBEE", statusColor: "#C62828" };
+}
+
+function calcFitTotal(scores) {
+  return Object.values(scores || {}).reduce((s, v) => s + (v || 0), 0);
+}
+
+function calcRedFlagCount(redFlags) {
+  return Object.values(redFlags || {}).filter(Boolean).length;
+}
+
+// ─── Fit Score Badge (card + detail) ───
+function FitScoreBadge({ fitReview }) {
+  if (!fitReview?.recommendation) return null;
+  const total = calcFitTotal(fitReview.scores);
+  const rfCount = calcRedFlagCount(fitReview.redFlags);
+  const band = getScoreBand(total, rfCount);
+  const rec = RECOMMENDATION_CONFIG[fitReview.recommendation] || RECOMMENDATION_CONFIG["No-Go"];
+  return (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+      <span style={{
+        fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
+        background: rec.bg, color: rec.color, border: `1px solid ${rec.border}`,
+      }}>{rec.emoji} {fitReview.recommendation}</span>
+      <span style={{
+        fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
+        background: band.statusBg, color: band.statusColor,
+      }}>Score: {total}/{TOTAL_MAX}</span>
+      {rfCount > 0 && (
+        <span style={{
+          fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
+          background: "#FFEBEE", color: "#C62828",
+        }}>⚑ {rfCount} Red Flag{rfCount > 1 ? "s" : ""}</span>
+      )}
+    </div>
+  );
+}
+
+// ─── Section score bar helper ───
+function SectionBar({ label, score, max }) {
+  const pct = max > 0 ? Math.round((score / max) * 100) : 0;
+  const color = pct >= 80 ? "#43A047" : pct >= 60 ? "#F9A825" : "#E53935";
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 3 }}>
+        <span style={{ color: "#444", fontWeight: 600 }}>{label}</span>
+        <span style={{ color, fontWeight: 700 }}>{score}/{max}</span>
+      </div>
+      <div style={{ height: 5, background: "#E8E8E8", borderRadius: 99, overflow: "hidden" }}>
+        <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 99, transition: "width 0.3s" }} />
+      </div>
+    </div>
+  );
+}
+
+// ─── Fit Review Modal ───
+function FitReviewModal({ rfp, onSave, onClose }) {
+  const ex = rfp.fitReview || {};
+  const [scores, setScores] = useState(ex.scores || {});
+  const [redFlags, setRedFlags] = useState(ex.redFlags || {});
+  const [recommendation, setRecommendation] = useState(ex.recommendation || "");
+  const [reviewerName, setReviewerName] = useState(ex.reviewerName || "");
+  const [reviewDate, setReviewDate] = useState(ex.reviewDate || new Date().toISOString().split("T")[0]);
+  const [keyReasons, setKeyReasons] = useState(ex.keyReasons || "");
+  const [keyConcerns, setKeyConcerns] = useState(ex.keyConcerns || "");
+  const [internalNotes, setInternalNotes] = useState(ex.internalNotes || "");
+  const [openSection, setOpenSection] = useState("strategic");
+
+  const total = calcFitTotal(scores);
+  const rfCount = calcRedFlagCount(redFlags);
+  const band = getScoreBand(total, rfCount);
+  const suggestedRec = band.rec;
+  const valid = recommendation && reviewerName;
+
+  const setScore = (key, val) => setScores(s => ({ ...s, [key]: val }));
+  const toggleFlag = (key) => setRedFlags(f => ({ ...f, [key]: !f[key] }));
+
+  const sectionScore = (sec) => sec.questions.reduce((s, q) => s + (scores[q.key] || 0), 0);
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(74,26,107,0.28)", zIndex: 1200,
+      display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
+    }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{
+        width: "min(660px, 96vw)", maxHeight: "92vh", background: "#FAFAFA",
+        borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(74,26,107,0.22)",
+        display: "flex", flexDirection: "column",
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: "18px 24px",
+          background: "linear-gradient(135deg, #4A1A6B, #6B2D9B)",
+          color: "#fff", display: "flex", justifyContent: "space-between", alignItems: "flex-start",
+        }}>
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 800 }}>🔍 Fit Evaluation</div>
+            <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>{rfp.districtName} — {rfp.rfpTitle}</div>
+            <div style={{ fontSize: 11, opacity: 0.65, marginTop: 2 }}>
+              Score each item 1–5. Higher = better fit. Risk section: 5 = low risk / very manageable.
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "#fff", fontSize: 22, cursor: "pointer", marginTop: -4 }}>✕</button>
+        </div>
+
+        {/* Top summary bar */}
+        <div style={{
+          display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 0,
+          borderBottom: "1px solid #E8E8E8", background: "#fff",
+        }}>
+          {[
+            { label: "Total Score", value: `${total}/${TOTAL_MAX}`, sub: band.statusLabel, color: band.statusColor, bg: band.statusBg },
+            { label: "Reviewer", value: reviewerName || "—", sub: reviewDate || "No date", color: "#6B2D9B", bg: "#F3EBF9" },
+            { label: "Recommendation", value: recommendation || "Not set", sub: rfCount > 0 ? `⚑ ${rfCount} red flag${rfCount > 1 ? "s" : ""}` : "No red flags", color: recommendation ? (RECOMMENDATION_CONFIG[recommendation]?.color || "#888") : "#888", bg: recommendation ? (RECOMMENDATION_CONFIG[recommendation]?.bg || "#f5f5f5") : "#f5f5f5" },
+          ].map((c, i) => (
+            <div key={i} style={{ padding: "12px 18px", borderRight: i < 2 ? "1px solid #E8E8E8" : "none", background: c.bg }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#888", letterSpacing: 0.5, textTransform: "uppercase" }}>{c.label}</div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: c.color, marginTop: 2 }}>{c.value}</div>
+              <div style={{ fontSize: 10, color: "#888", marginTop: 1 }}>{c.sub}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ overflowY: "auto", flex: 1, padding: "20px 24px" }}>
+
+          {/* Reviewer info */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#6B2D9B", letterSpacing: 0.5, textTransform: "uppercase" }}>Reviewer Name *</span>
+              <input value={reviewerName} onChange={e => setReviewerName(e.target.value)} placeholder="Your name"
+                style={{ padding: "9px 12px", borderRadius: 8, border: "1px solid #D1D1D1", fontSize: 13, fontFamily: "'DM Sans', sans-serif", outline: "none", boxSizing: "border-box" }} />
+            </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#6B2D9B", letterSpacing: 0.5, textTransform: "uppercase" }}>Review Date</span>
+              <input type="date" value={reviewDate} onChange={e => setReviewDate(e.target.value)}
+                style={{ padding: "9px 12px", borderRadius: 8, border: "1px solid #D1D1D1", fontSize: 13, fontFamily: "'DM Sans', sans-serif", outline: "none", boxSizing: "border-box" }} />
+            </label>
+          </div>
+
+          {/* Scored sections — accordion */}
+          {FIT_SECTIONS.map(sec => {
+            const secScore = sectionScore(sec);
+            const isOpen = openSection === sec.key;
+            const pct = Math.round((secScore / sec.maxScore) * 100);
+            const barColor = pct >= 80 ? "#43A047" : pct >= 60 ? "#F9A825" : "#E53935";
+            return (
+              <div key={sec.key} style={{
+                marginBottom: 8, borderRadius: 10, overflow: "hidden",
+                border: `1.5px solid ${isOpen ? "#6B2D9B" : "#E8E8E8"}`,
+                transition: "border-color 0.2s",
+              }}>
+                {/* Section header */}
+                <button onClick={() => setOpenSection(isOpen ? null : sec.key)} style={{
+                  width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "12px 16px", background: isOpen ? "#F3EBF9" : "#fff",
+                  border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+                  transition: "background 0.2s",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: isOpen ? "#4A1A6B" : "#444" }}>{sec.label}</span>
+                    <div style={{ flex: 1, maxWidth: 120, height: 4, background: "#E8E8E8", borderRadius: 99, overflow: "hidden" }}>
+                      <div style={{ width: `${pct}%`, height: "100%", background: barColor, borderRadius: 99 }} />
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: barColor }}>{secScore}/{sec.maxScore}</span>
+                    <span style={{ color: "#888", fontSize: 14 }}>{isOpen ? "▲" : "▼"}</span>
+                  </div>
+                </button>
+                {/* Section body */}
+                {isOpen && (
+                  <div style={{ padding: "12px 16px 16px", background: "#fff", borderTop: "1px solid #F3EBF9" }}>
+                    <div style={{ fontSize: 11, color: "#888", marginBottom: 14, fontStyle: "italic" }}>{sec.purpose}</div>
+                    {sec.questions.map(q => (
+                      <div key={q.key} style={{ marginBottom: 14 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                          <div style={{ flex: 1, paddingRight: 12 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a" }}>{q.label}</div>
+                            <div style={{ fontSize: 11, color: "#888", marginTop: 1 }}>{q.hint}</div>
+                          </div>
+                          <span style={{ fontSize: 18, fontWeight: 800, minWidth: 24, textAlign: "right",
+                            color: scores[q.key] ? barColor : "#D1D1D1" }}>{scores[q.key] || "—"}</span>
+                        </div>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          {[1,2,3,4,5].map(n => (
+                            <button key={n} onClick={() => setScore(q.key, n)} style={{
+                              flex: 1, padding: "8px 0", borderRadius: 8, fontSize: 13, fontWeight: 700,
+                              fontFamily: "'DM Sans', sans-serif", cursor: "pointer", transition: "all 0.15s",
+                              border: `2px solid ${scores[q.key] === n ? "#6B2D9B" : "#E8E8E8"}`,
+                              background: scores[q.key] === n ? "#F3EBF9" : "#fff",
+                              color: scores[q.key] === n ? "#4A1A6B" : "#888",
+                            }}>{n}</button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Red Flags */}
+          <div style={{
+            marginBottom: 20, marginTop: 4, padding: "14px 16px", borderRadius: 10,
+            background: rfCount > 0 ? "#FFEBEE" : "#fff",
+            border: `1.5px solid ${rfCount > 0 ? "#EF9A9A" : "#E8E8E8"}`,
+            transition: "all 0.2s",
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: rfCount > 0 ? "#C62828" : "#6B2D9B", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 12 }}>
+              ⚑ Red Flag Checks
+            </div>
+            {rfCount >= 2 && (
+              <div style={{ fontSize: 12, color: "#C62828", fontWeight: 600, background: "#FFCDD2", padding: "8px 12px", borderRadius: 6, marginBottom: 12 }}>
+                ⚠️ 2+ red flags — default recommendation is No-Go unless leadership approves.
+              </div>
+            )}
+            {rfCount === 1 && (
+              <div style={{ fontSize: 12, color: "#E65100", fontWeight: 600, background: "#FFF3E0", padding: "8px 12px", borderRadius: 6, marginBottom: 12 }}>
+                Manual leadership review recommended before pursuing.
+              </div>
+            )}
+            {RED_FLAGS.map(rf => (
+              <div key={rf.key} onClick={() => toggleFlag(rf.key)} style={{
+                display: "flex", alignItems: "center", gap: 10, marginBottom: 8, cursor: "pointer",
+                padding: "8px 10px", borderRadius: 8,
+                background: redFlags[rf.key] ? "#FFEBEE" : "#F5F5F5",
+                border: `1px solid ${redFlags[rf.key] ? "#EF9A9A" : "#E8E8E8"}`,
+              }}>
+                <div style={{
+                  width: 20, height: 20, borderRadius: 4, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                  background: redFlags[rf.key] ? "#E53935" : "#fff",
+                  border: `2px solid ${redFlags[rf.key] ? "#E53935" : "#D1D1D1"}`,
+                  transition: "all 0.15s",
+                }}>
+                  {redFlags[rf.key] && <span style={{ color: "#fff", fontSize: 13, lineHeight: 1, fontWeight: 700 }}>✓</span>}
+                </div>
+                <span style={{ fontSize: 13, color: redFlags[rf.key] ? "#C62828" : "#444", fontWeight: redFlags[rf.key] ? 700 : 400 }}>
+                  {rf.label}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Recommendation */}
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#6B2D9B", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 10 }}>
+            Final Recommendation {suggestedRec && <span style={{ fontWeight: 400, color: "#888", textTransform: "none", letterSpacing: 0 }}>(suggested: {suggestedRec})</span>}
+          </div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+            {["Go", "Go with Caution", "No-Go"].map(r => {
+              const cfg = RECOMMENDATION_CONFIG[r];
+              const active = recommendation === r;
+              return (
+                <button key={r} onClick={() => setRecommendation(r)} style={{
+                  flex: 1, padding: "12px 8px", borderRadius: 10, fontSize: 13, fontWeight: 700,
+                  fontFamily: "'DM Sans', sans-serif", cursor: "pointer", transition: "all 0.2s",
+                  border: `2px solid ${active ? cfg.border : "#E8E8E8"}`,
+                  background: active ? cfg.bg : "#fff", color: active ? cfg.color : "#888",
+                  boxShadow: active ? `0 2px 8px ${cfg.border}88` : "none",
+                }}>{cfg.emoji} {r}</button>
+              );
+            })}
+          </div>
+
+          {/* Key reasons / concerns / notes */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#43A047", letterSpacing: 0.5, textTransform: "uppercase" }}>Key Reasons to Pursue</span>
+              <textarea value={keyReasons} onChange={e => setKeyReasons(e.target.value)}
+                placeholder="What makes this worth pursuing?" rows={2}
+                style={{ padding: "9px 12px", borderRadius: 8, border: "1px solid #D1D1D1", fontSize: 13, fontFamily: "'DM Sans', sans-serif", outline: "none", resize: "vertical", boxSizing: "border-box" }} />
+            </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#E53935", letterSpacing: 0.5, textTransform: "uppercase" }}>Key Concerns</span>
+              <textarea value={keyConcerns} onChange={e => setKeyConcerns(e.target.value)}
+                placeholder="What are the biggest concerns or risks?" rows={2}
+                style={{ padding: "9px 12px", borderRadius: 8, border: "1px solid #D1D1D1", fontSize: 13, fontFamily: "'DM Sans', sans-serif", outline: "none", resize: "vertical", boxSizing: "border-box" }} />
+            </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#6B2D9B", letterSpacing: 0.5, textTransform: "uppercase" }}>Internal Notes</span>
+              <textarea value={internalNotes} onChange={e => setInternalNotes(e.target.value)}
+                placeholder="Any additional context for the team..." rows={2}
+                style={{ padding: "9px 12px", borderRadius: 8, border: "1px solid #D1D1D1", fontSize: 13, fontFamily: "'DM Sans', sans-serif", outline: "none", resize: "vertical", boxSizing: "border-box" }} />
+            </label>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          padding: "14px 24px", borderTop: "1px solid #E8E8E8",
+          display: "flex", justifyContent: "flex-end", gap: 10, background: "#fff",
+        }}>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="teal" onClick={() => onSave({ scores, redFlags, recommendation, reviewerName, reviewDate, keyReasons, keyConcerns, internalNotes })} disabled={!valid}>
+            Save Evaluation
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Signed Docs Progress Bar (for card) ───
 function SignedDocsBar({ docs }) {
   if (!docs || docs.length === 0) return null;
@@ -423,7 +815,7 @@ function SignedDocsBar({ docs }) {
 }
 
 // ─── RFP Detail Panel ───
-function RFPDetail({ rfp, onClose, onEdit, onDelete }) {
+function RFPDetail({ rfp, onClose, onEdit, onDelete, onFitReview, onMoveToActive, onArchiveNoGo }) {
   const urgency = getUrgencyTag(rfp.dueDate, rfp.status);
   const section = (title, children) => (
     <div style={{ marginBottom: 24 }}>
@@ -600,6 +992,72 @@ function RFPDetail({ rfp, onClose, onEdit, onDelete }) {
             <div style={{ fontSize: 13, color: BRAND.gray700, whiteSpace: "pre-wrap", background: BRAND.gray100,
               padding: 12, borderRadius: 8, lineHeight: 1.6 }}>{rfp.notes}</div>
           ))}
+
+          {/* Fit Review Section in detail panel */}
+          {rfp.status === "Under Review" && (
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: BRAND.midPurple, letterSpacing: 1,
+                textTransform: "uppercase", marginBottom: 10, borderBottom: `2px solid ${BRAND.lightPurple}`,
+                paddingBottom: 6 }}>Company Fit Evaluation</div>
+              {rfp.fitReview?.recommendation ? (
+                <div style={{ padding: "14px 16px", borderRadius: 10, background: BRAND.gray100, border: `1px solid ${BRAND.gray200}`, marginBottom: 12 }}>
+                  <FitScoreBadge fitReview={rfp.fitReview} />
+                  <div style={{ marginTop: 12 }}>
+                    {FIT_SECTIONS.map(sec => {
+                      const secScore = sec.questions.reduce((s, q) => s + (rfp.fitReview.scores?.[q.key] || 0), 0);
+                      return <SectionBar key={sec.key} label={sec.label} score={secScore} max={sec.maxScore} />;
+                    })}
+                  </div>
+                  {rfp.fitReview.keyReasons && (
+                    <div style={{ marginTop: 10, fontSize: 12, color: "#2E7D32", background: "#E8F5E9",
+                      padding: "8px 12px", borderRadius: 6, borderLeft: `3px solid #A5D6A7` }}>
+                      <strong>Reasons:</strong> {rfp.fitReview.keyReasons}
+                    </div>
+                  )}
+                  {rfp.fitReview.keyConcerns && (
+                    <div style={{ marginTop: 6, fontSize: 12, color: "#C62828", background: "#FFEBEE",
+                      padding: "8px 12px", borderRadius: 6, borderLeft: `3px solid #EF9A9A` }}>
+                      <strong>Concerns:</strong> {rfp.fitReview.keyConcerns}
+                    </div>
+                  )}
+                  {rfp.fitReview.internalNotes && (
+                    <div style={{ marginTop: 6, fontSize: 12, color: BRAND.gray700, background: "#FFFDE7",
+                      padding: "8px 12px", borderRadius: 6, borderLeft: `3px solid ${BRAND.amber}` }}>
+                      <strong>Notes:</strong> {rfp.fitReview.internalNotes}
+                    </div>
+                  )}
+                  <div style={{ marginTop: 8, fontSize: 11, color: BRAND.gray500 }}>
+                    Reviewed by {rfp.fitReview.reviewerName} · {rfp.fitReview.reviewDate ? new Date(rfp.fitReview.reviewDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""}
+                  </div>
+                  <button onClick={onFitReview} style={{
+                    marginTop: 10, fontSize: 12, fontWeight: 600, color: BRAND.midPurple,
+                    background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline",
+                  }}>Edit evaluation</button>
+                </div>
+              ) : (
+                <div style={{ padding: "16px", borderRadius: 10, background: "#FFF8E1",
+                  border: `1.5px dashed ${BRAND.amber}`, marginBottom: 12, textAlign: "center" }}>
+                  <div style={{ fontSize: 13, color: "#E65100", fontWeight: 600, marginBottom: 8 }}>No evaluation yet</div>
+                  <Button variant="outline" onClick={onFitReview} style={{ fontSize: 13, padding: "8px 16px" }}>
+                    🔍 Start Fit Evaluation
+                  </Button>
+                </div>
+              )}
+              {/* Move actions */}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button onClick={onMoveToActive} style={{
+                  flex: 1, padding: "10px 14px", borderRadius: 8, fontSize: 13, fontWeight: 700,
+                  fontFamily: "'DM Sans', sans-serif", cursor: "pointer",
+                  background: "#E8F5E9", color: "#2E7D32", border: `1.5px solid #A5D6A7`,
+                }}>✅ Move to Active</button>
+                <button onClick={() => { if (window.confirm("Archive this RFP as No-Go?")) onArchiveNoGo(); }} style={{
+                  flex: 1, padding: "10px 14px", borderRadius: 8, fontSize: 13, fontWeight: 700,
+                  fontFamily: "'DM Sans', sans-serif", cursor: "pointer",
+                  background: "#FFEBEE", color: "#C62828", border: `1.5px solid #EF9A9A`,
+                }}>🚫 Archive as No-Go</button>
+              </div>
+            </div>
+          )}
 
           <div style={{ display: "flex", gap: 10, paddingBottom: 28, paddingTop: 8 }}>
             <Button variant="outline" onClick={onEdit}>Edit RFP</Button>
@@ -813,6 +1271,20 @@ function RFPCard({ rfp, onClick }) {
         )}
       </div>
 
+      {/* Fit score badge for Under Review */}
+      {rfp.status === "Under Review" && rfp.fitReview?.recommendation && (
+        <div style={{ marginTop: 10 }}>
+          <FitScoreBadge fitReview={rfp.fitReview} />
+          {rfp.fitReview.keyConcerns && (
+            <div style={{ fontSize: 11, color: "#C62828", marginTop: 5, display: "flex", gap: 4, alignItems: "flex-start" }}>
+              <span style={{ flexShrink: 0 }}>⚑</span>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {rfp.fitReview.keyConcerns}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
       {/* Signed docs progress bar */}
       <SignedDocsBar docs={rfp.requiredDocs} />
     </div>
@@ -880,6 +1352,7 @@ export default function HeyTutorRFPTracker() {
   const [archiveFilter, setArchiveFilter] = useState("All");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("dueDate");
+  const [fitReviewTarget, setFitReviewTarget] = useState(null);
 
   useEffect(() => {
     loadRFPs().then(data => { setRfps(data); setLoaded(true); });
@@ -898,6 +1371,37 @@ export default function HeyTutorRFPTracker() {
     await saveRFP(updated);
     setEditing(null);
   }, [editing]);
+
+  const handleFitReviewSave = useCallback(async (rfpId, fitReview) => {
+    setRfps(prev => prev.map(r => {
+      if (r.id !== rfpId) return r;
+      const updated = { ...r, fitReview };
+      saveRFP(updated);
+      if (view && view.id === rfpId) setView(updated);
+      return updated;
+    }));
+    setFitReviewTarget(null);
+  }, [view]);
+
+  const handleMoveToActive = useCallback(async (rfpId) => {
+    setRfps(prev => prev.map(r => {
+      if (r.id !== rfpId) return r;
+      const updated = { ...r, status: "In Progress" };
+      saveRFP(updated);
+      return updated;
+    }));
+    setView(null);
+  }, []);
+
+  const handleArchiveNoGo = useCallback(async (rfpId) => {
+    setRfps(prev => prev.map(r => {
+      if (r.id !== rfpId) return r;
+      const updated = { ...r, status: "Lost" };
+      saveRFP(updated);
+      return updated;
+    }));
+    setView(null);
+  }, []);
 
   const handleDelete = useCallback(async (id) => {
     setRfps(prev => prev.filter(r => r.id !== id));
@@ -1046,7 +1550,15 @@ export default function HeyTutorRFPTracker() {
       {/* Modals */}
       {view && !editing && (
         <RFPDetail rfp={view} onClose={() => setView(null)}
-          onEdit={() => setEditing(view)} onDelete={handleDelete} />
+          onEdit={() => setEditing(view)} onDelete={handleDelete}
+          onFitReview={() => setFitReviewTarget(view)}
+          onMoveToActive={() => handleMoveToActive(view.id)}
+          onArchiveNoGo={() => handleArchiveNoGo(view.id)} />
+      )}
+      {fitReviewTarget && (
+        <FitReviewModal rfp={fitReviewTarget}
+          onSave={(fitReview) => handleFitReviewSave(fitReviewTarget.id, fitReview)}
+          onClose={() => setFitReviewTarget(null)} />
       )}
       {editing && (
         <RFPForm rfp={editing === "new" ? null : editing}
