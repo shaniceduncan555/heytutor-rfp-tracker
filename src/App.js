@@ -1299,6 +1299,179 @@ const TABS = [
 ];
 
 // ─── Summary Cards ───
+// ─── Upcoming Deadlines Dashboard ───
+const DEADLINE_LANES = [
+  {
+    key: "overdue",
+    label: "Overdue",
+    emoji: "🔴",
+    bg: "#FFEBEE",
+    borderColor: "#E53935",
+    headerColor: "#C62828",
+    filter: (days) => days !== null && days < 0,
+  },
+  {
+    key: "week",
+    label: "Due ≤ 7 Days",
+    emoji: "🟠",
+    bg: "#FFF8E1",
+    borderColor: "#F9A825",
+    headerColor: "#E65100",
+    filter: (days) => days !== null && days >= 0 && days <= 7,
+  },
+  {
+    key: "twoweeks",
+    label: "Due 8–14 Days",
+    emoji: "🟡",
+    bg: "#FFFDE7",
+    borderColor: "#FDD835",
+    headerColor: "#F57F17",
+    filter: (days) => days !== null && days >= 8 && days <= 14,
+  },
+  {
+    key: "later",
+    label: "Due 15+ Days",
+    emoji: "🟢",
+    bg: "#F1F8E9",
+    borderColor: "#66BB6A",
+    headerColor: "#2E7D32",
+    filter: (days) => days === null || days > 14,
+  },
+];
+
+const ACTIVE_STATUSES = ["Not Started", "In Progress", "Under Review"];
+
+function DeadlineCard({ rfp, onClick }) {
+  const [hover, setHover] = useState(false);
+  const urgency = getUrgencyTag(rfp.dueDate, rfp.status);
+  return (
+    <div
+      onClick={() => onClick(rfp)}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        background: hover ? BRAND.lightPurple : BRAND.white,
+        border: `1px solid ${hover ? BRAND.midPurple : BRAND.gray200}`,
+        borderRadius: 8, padding: "10px 12px", cursor: "pointer",
+        transition: "all 0.18s",
+        boxShadow: hover ? "0 2px 10px rgba(74,26,107,0.08)" : "none",
+      }}
+    >
+      <div style={{
+        fontSize: 13, fontWeight: 700, color: BRAND.deepPurple,
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        marginBottom: 2,
+      }}>{rfp.districtName}</div>
+      <div style={{
+        fontSize: 11, color: BRAND.gray500,
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        marginBottom: 7,
+      }}>{rfp.rfpTitle}</div>
+      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
+        <StatusDot status={rfp.status} />
+        {urgency && <Badge bg={urgency.bg} color={urgency.color}>{urgency.label}</Badge>}
+      </div>
+      {rfp.dueDate && (
+        <div style={{ fontSize: 11, color: BRAND.gray500, marginTop: 5, fontWeight: 500 }}>
+          📅 {formatDate(rfp.dueDate)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UpcomingDeadlines({ rfps, onCardClick }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const active = rfps.filter(r => ACTIVE_STATUSES.includes(r.status) && r.dueDate);
+  const noDate = rfps.filter(r => ACTIVE_STATUSES.includes(r.status) && !r.dueDate);
+
+  const laneRfps = (lane) =>
+    active
+      .filter(r => lane.filter(getDaysUntil(r.dueDate)))
+      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+
+  const totalActive = rfps.filter(r => ACTIVE_STATUSES.includes(r.status)).length;
+  if (totalActive === 0) return null;
+
+  return (
+    <div style={{ marginBottom: 28 }}>
+      {/* Section header */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        marginBottom: collapsed ? 0 : 14,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 16 }}>📅</span>
+          <span style={{ fontSize: 14, fontWeight: 800, color: BRAND.deepPurple, letterSpacing: -0.2 }}>
+            Upcoming Deadlines
+          </span>
+          <span style={{
+            fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 20,
+            background: BRAND.lightPurple, color: BRAND.midPurple,
+          }}>{totalActive} active</span>
+        </div>
+        <button onClick={() => setCollapsed(c => !c)} style={{
+          background: "none", border: "none", cursor: "pointer",
+          fontSize: 12, fontWeight: 600, color: BRAND.gray500,
+          display: "flex", alignItems: "center", gap: 4,
+        }}>
+          {collapsed ? "Show ▼" : "Hide ▲"}
+        </button>
+      </div>
+
+      {!collapsed && (
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: 12,
+        }}>
+          {DEADLINE_LANES.map(lane => {
+            const items = laneRfps(lane);
+            // For "later" lane also include no-date RFPs
+            const allItems = lane.key === "later" ? [...items, ...noDate] : items;
+            return (
+              <div key={lane.key} style={{
+                background: lane.bg,
+                border: `1.5px solid ${lane.borderColor}`,
+                borderRadius: 12, padding: "12px 12px 14px",
+                minHeight: 80,
+              }}>
+                {/* Lane header */}
+                <div style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  marginBottom: 10,
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <span style={{ fontSize: 13 }}>{lane.emoji}</span>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: lane.headerColor }}>{lane.label}</span>
+                  </div>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700,
+                    background: "rgba(255,255,255,0.7)", color: lane.headerColor,
+                    padding: "1px 7px", borderRadius: 20,
+                  }}>{allItems.length}</span>
+                </div>
+                {/* Cards */}
+                {allItems.length === 0 ? (
+                  <div style={{ fontSize: 11, color: "#aaa", textAlign: "center", paddingTop: 8 }}>
+                    Nothing here
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                    {allItems.map(rfp => (
+                      <DeadlineCard key={rfp.id} rfp={rfp} onClick={onCardClick} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SummaryCards({ rfps, activeTab }) {
   const active = rfps.filter(r => ["Not Started", "In Progress"].includes(r.status));
   const review = rfps.filter(r => r.status === "Under Review");
@@ -1457,6 +1630,8 @@ export default function HeyTutorRFPTracker() {
       {/* Content */}
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 32px" }}>
         <SummaryCards rfps={rfps} activeTab={activeTab} />
+
+        <UpcomingDeadlines rfps={rfps} onCardClick={(rfp) => setView(rfp)} />
 
         {/* Tabs */}
         <div style={{
