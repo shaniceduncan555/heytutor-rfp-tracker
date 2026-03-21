@@ -814,6 +814,91 @@ function SignedDocsBar({ docs }) {
   );
 }
 
+// ─── Fit Review Summary Block (shown in detail panel) ───
+function FitReviewSummaryBlock({ fitReviewSummary, fitReview }) {
+  if (!fitReviewSummary?.recommendation) return null;
+
+  const { totalScore, maxScore, percentage, fitLabel, recommendation, reviewerName, reviewDate } = fitReviewSummary;
+
+  const COLOR_MAP = {
+    "Strong Fit":   { bg: "#E8F5E9", border: "#A5D6A7", color: "#2E7D32", dot: "#43A047" },
+    "Moderate Fit": { bg: "#FFF8E1", border: "#FFD54F", color: "#E65100", dot: "#F9A825" },
+    "Weak Fit":     { bg: "#FFF3E0", border: "#FFCC80", color: "#F57C00", dot: "#FFA726" },
+    "No-Go":        { bg: "#FFEBEE", border: "#EF9A9A", color: "#C62828", dot: "#E53935" },
+  };
+
+  const style = COLOR_MAP[fitLabel] || COLOR_MAP["No-Go"];
+  const rec = RECOMMENDATION_CONFIG[recommendation] || {};
+  const dateStr = reviewDate
+    ? new Date(reviewDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : "";
+
+  return (
+    <div style={{
+      marginBottom: 20,
+      borderRadius: 10,
+      border: `1.5px solid ${style.border}`,
+      background: style.bg,
+      padding: "12px 16px",
+      display: "flex", flexDirection: "column", gap: 8,
+    }}>
+      {/* Score row */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {/* Score pill */}
+          <span style={{
+            fontSize: 15, fontWeight: 800, color: style.color,
+            background: "rgba(255,255,255,0.7)", padding: "3px 12px",
+            borderRadius: 20, border: `1px solid ${style.border}`,
+          }}>
+            {totalScore}/{maxScore}
+          </span>
+          {/* Fit label */}
+          <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <span style={{
+              width: 8, height: 8, borderRadius: "50%",
+              background: style.dot, display: "inline-block", flexShrink: 0,
+            }} />
+            <span style={{ fontSize: 13, fontWeight: 700, color: style.color }}>{fitLabel}</span>
+          </span>
+        </div>
+        {/* Recommendation chip */}
+        {recommendation && (
+          <span style={{
+            fontSize: 12, fontWeight: 700,
+            padding: "3px 10px", borderRadius: 20,
+            background: rec.bg || style.bg,
+            color: rec.color || style.color,
+            border: `1px solid ${rec.border || style.border}`,
+          }}>{rec.emoji} {recommendation}</span>
+        )}
+      </div>
+
+      {/* Score bar */}
+      <div style={{ height: 5, background: "rgba(0,0,0,0.08)", borderRadius: 99, overflow: "hidden" }}>
+        <div style={{
+          width: `${percentage}%`, height: "100%",
+          background: style.dot, borderRadius: 99, transition: "width 0.4s ease",
+        }} />
+      </div>
+
+      {/* Reviewer row */}
+      {(reviewerName || dateStr) && (
+        <div style={{ fontSize: 11, color: style.color, opacity: 0.8 }}>
+          {reviewerName && <span>Reviewed by <strong>{reviewerName}</strong></span>}
+          {reviewerName && dateStr && <span> · </span>}
+          {dateStr && <span>{dateStr}</span>}
+          {fitReview?.keyConcerns && (
+            <span style={{ display: "block", marginTop: 3, fontStyle: "italic", opacity: 0.9 }}>
+              ⚑ {fitReview.keyConcerns}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── RFP Detail Panel ───
 function RFPDetail({ rfp, onClose, onEdit, onDelete, onFitReview, onMoveToActive, onArchiveNoGo }) {
   const urgency = getUrgencyTag(rfp.dueDate, rfp.status);
@@ -864,6 +949,8 @@ function RFPDetail({ rfp, onClose, onEdit, onDelete, onFitReview, onMoveToActive
               <Badge bg="#EDE7F6" color={BRAND.midPurple}>👤 AE: {rfp.aeName || "TBD"}</Badge>
             )}
           </div>
+
+          <FitReviewSummaryBlock fitReviewSummary={rfp.fitReviewSummary} fitReview={rfp.fitReview} />
 
           {scopeParts.length > 0 && section("Quick Scope of Work", <>
             {field("Service Type", rfp.serviceType)}
@@ -1546,9 +1633,21 @@ export default function HeyTutorRFPTracker() {
   }, [editing]);
 
   const handleFitReviewSave = useCallback(async (rfpId, fitReview) => {
+    const total = calcFitTotal(fitReview.scores);
+    const rfCount = calcRedFlagCount(fitReview.redFlags);
+    const band = getScoreBand(total, rfCount);
+    const fitReviewSummary = {
+      totalScore: total,
+      maxScore: TOTAL_MAX,
+      percentage: Math.round((total / TOTAL_MAX) * 100),
+      fitLabel: band.statusLabel,
+      recommendation: fitReview.recommendation,
+      reviewerName: fitReview.reviewerName,
+      reviewDate: fitReview.reviewDate,
+    };
     setRfps(prev => prev.map(r => {
       if (r.id !== rfpId) return r;
-      const updated = { ...r, fitReview };
+      const updated = { ...r, fitReview, fitReviewSummary };
       saveRFP(updated);
       if (view && view.id === rfpId) setView(updated);
       return updated;
