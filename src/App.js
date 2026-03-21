@@ -819,19 +819,44 @@ function RFPCard({ rfp, onClick }) {
   );
 }
 
+// ─── Tab definitions ───
+const TABS = [
+  { key: "active", label: "Active RFPs", statuses: ["Not Started", "In Progress"] },
+  { key: "review", label: "Under Review", statuses: ["Under Review"] },
+  { key: "archive", label: "Submitted Archive", statuses: ["Submitted", "Won", "Lost"] },
+];
+
 // ─── Summary Cards ───
-function SummaryCards({ rfps }) {
-  const active = rfps.filter(r => !["Won", "Lost", "Submitted"].includes(r.status));
+function SummaryCards({ rfps, activeTab }) {
+  const active = rfps.filter(r => ["Not Started", "In Progress"].includes(r.status));
+  const review = rfps.filter(r => r.status === "Under Review");
   const overdue = active.filter(r => getDaysUntil(r.dueDate) !== null && getDaysUntil(r.dueDate) < 0).length;
   const dueSoon = active.filter(r => { const d = getDaysUntil(r.dueDate); return d !== null && d >= 0 && d <= 7; }).length;
   const won = rfps.filter(r => r.status === "Won").length;
+  const submitted = rfps.filter(r => r.status === "Submitted").length;
 
-  const cards = [
-    { label: "Active RFPs", value: active.length, color: BRAND.midPurple, bg: "#EDE7F6" },
-    { label: "Due ≤ 7 Days", value: dueSoon, color: "#E65100", bg: "#FFF8E1" },
-    { label: "Overdue", value: overdue, color: BRAND.red, bg: "#FFEBEE" },
-    { label: "Won", value: won, color: BRAND.teal, bg: "#E0F2F1" },
-  ];
+  const cardsByTab = {
+    active: [
+      { label: "Active RFPs", value: active.length, color: BRAND.midPurple, bg: "#EDE7F6" },
+      { label: "Due ≤ 7 Days", value: dueSoon, color: "#E65100", bg: "#FFF8E1" },
+      { label: "Overdue", value: overdue, color: BRAND.red, bg: "#FFEBEE" },
+      { label: "Won", value: won, color: BRAND.teal, bg: "#E0F2F1" },
+    ],
+    review: [
+      { label: "Under Review", value: review.length, color: "#E65100", bg: "#FFF8E1" },
+      { label: "Due ≤ 7 Days", value: review.filter(r => { const d = getDaysUntil(r.dueDate); return d !== null && d >= 0 && d <= 7; }).length, color: BRAND.red, bg: "#FFEBEE" },
+      { label: "Active RFPs", value: active.length, color: BRAND.midPurple, bg: "#EDE7F6" },
+      { label: "Won", value: won, color: BRAND.teal, bg: "#E0F2F1" },
+    ],
+    archive: [
+      { label: "Submitted", value: submitted, color: BRAND.green, bg: "#E8F5E9" },
+      { label: "Won", value: won, color: BRAND.teal, bg: "#E0F2F1" },
+      { label: "Lost", value: rfps.filter(r => r.status === "Lost").length, color: BRAND.red, bg: "#FFEBEE" },
+      { label: "Active RFPs", value: active.length, color: BRAND.midPurple, bg: "#EDE7F6" },
+    ],
+  };
+
+  const cards = cardsByTab[activeTab] || cardsByTab.active;
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 24 }}>
@@ -851,7 +876,8 @@ export default function HeyTutorRFPTracker() {
   const [loaded, setLoaded] = useState(false);
   const [view, setView] = useState(null);
   const [editing, setEditing] = useState(null);
-  const [filter, setFilter] = useState("All");
+  const [activeTab, setActiveTab] = useState("active");
+  const [archiveFilter, setArchiveFilter] = useState("All");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("dueDate");
 
@@ -879,8 +905,11 @@ export default function HeyTutorRFPTracker() {
     await deleteRFP(id);
   }, []);
 
+  // ─── Filtering ───
+  const currentTab = TABS.find(t => t.key === activeTab);
   const filtered = rfps
-    .filter(r => filter === "All" || r.status === filter)
+    .filter(r => currentTab.statuses.includes(r.status))
+    .filter(r => activeTab === "archive" && archiveFilter !== "All" ? r.status === archiveFilter : true)
     .filter(r => {
       if (!search) return true;
       const s = search.toLowerCase();
@@ -923,24 +952,59 @@ export default function HeyTutorRFPTracker() {
 
       {/* Content */}
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 32px" }}>
-        <SummaryCards rfps={rfps} />
+        <SummaryCards rfps={rfps} activeTab={activeTab} />
+
+        {/* Tabs */}
+        <div style={{
+          display: "flex", gap: 4, marginBottom: 20,
+          borderBottom: `2px solid ${BRAND.gray200}`,
+        }}>
+          {TABS.map(tab => {
+            const isActive = activeTab === tab.key;
+            const count = rfps.filter(r => tab.statuses.includes(r.status)).length;
+            return (
+              <button key={tab.key} onClick={() => { setActiveTab(tab.key); setSearch(""); setArchiveFilter("All"); }}
+                style={{
+                  padding: "10px 20px", border: "none", cursor: "pointer",
+                  fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 700,
+                  background: "transparent", transition: "all 0.2s",
+                  color: isActive ? BRAND.deepPurple : BRAND.gray500,
+                  borderBottom: isActive ? `3px solid ${BRAND.deepPurple}` : "3px solid transparent",
+                  marginBottom: -2, display: "flex", alignItems: "center", gap: 8,
+                }}>
+                {tab.label}
+                <span style={{
+                  fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 20,
+                  background: isActive ? BRAND.lightPurple : BRAND.gray200,
+                  color: isActive ? BRAND.midPurple : BRAND.gray500,
+                }}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
 
         {/* Toolbar */}
         <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
           <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search districts, titles, authors, AEs..."
+            placeholder={`Search ${currentTab.label.toLowerCase()}...`}
             style={{
               flex: "1 1 220px", padding: "10px 14px", borderRadius: 8,
               border: `1px solid ${BRAND.gray300}`, fontSize: 14,
               fontFamily: "'DM Sans', sans-serif", outline: "none", minWidth: 180,
             }} />
-          <select value={filter} onChange={e => setFilter(e.target.value)} style={{
-            padding: "10px 14px", borderRadius: 8, border: `1px solid ${BRAND.gray300}`,
-            fontSize: 13, fontFamily: "'DM Sans', sans-serif", background: BRAND.white, cursor: "pointer",
-          }}>
-            <option value="All">All Statuses</option>
-            {Object.keys(STATUS_CONFIG).map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
+          {activeTab === "archive" && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {["All", "Submitted", "Won", "Lost"].map(f => (
+                <button key={f} onClick={() => setArchiveFilter(f)} style={{
+                  padding: "8px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700,
+                  fontFamily: "'DM Sans', sans-serif", cursor: "pointer", transition: "all 0.15s",
+                  border: `1.5px solid ${archiveFilter === f ? BRAND.midPurple : BRAND.gray300}`,
+                  background: archiveFilter === f ? BRAND.lightPurple : BRAND.white,
+                  color: archiveFilter === f ? BRAND.midPurple : BRAND.gray700,
+                }}>{f}</button>
+              ))}
+            </div>
+          )}
           <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{
             padding: "10px 14px", borderRadius: 8, border: `1px solid ${BRAND.gray300}`,
             fontSize: 13, fontFamily: "'DM Sans', sans-serif", background: BRAND.white, cursor: "pointer",
@@ -962,12 +1026,12 @@ export default function HeyTutorRFPTracker() {
             textAlign: "center", padding: "60px 20px", color: BRAND.gray500,
             background: BRAND.white, borderRadius: 16, border: `1px dashed ${BRAND.gray300}`,
           }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>{activeTab === "archive" ? "🗂️" : "📋"}</div>
             <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 6 }}>
-              {rfps.length === 0 ? "No RFPs yet" : "No matches found"}
+              {rfps.length === 0 ? "No RFPs yet" : `No ${currentTab.label.toLowerCase()} found`}
             </div>
             <div style={{ fontSize: 13 }}>
-              {rfps.length === 0 ? `Click "+ New RFP" to start tracking your first proposal.` : "Try adjusting your filters or search."}
+              {rfps.length === 0 ? `Click "+ New RFP" to start tracking your first proposal.` : "Try adjusting your search or filters."}
             </div>
           </div>
         ) : (
