@@ -1385,51 +1385,34 @@ const TABS = [
   { key: "archive", label: "Submitted Archive", statuses: ["Submitted", "Won", "Lost"] },
 ];
 
-// ─── Summary Cards ───
-// ─── Upcoming Deadlines Dashboard ───
-const DEADLINE_LANES = [
-  {
-    key: "overdue",
-    label: "Overdue",
-    emoji: "🔴",
-    bg: "#FFEBEE",
-    borderColor: "#E53935",
-    headerColor: "#C62828",
-    filter: (days) => days !== null && days < 0,
-  },
-  {
-    key: "week",
-    label: "Due ≤ 7 Days",
-    emoji: "🟠",
-    bg: "#FFF8E1",
-    borderColor: "#F9A825",
-    headerColor: "#E65100",
-    filter: (days) => days !== null && days >= 0 && days <= 7,
-  },
-  {
-    key: "twoweeks",
-    label: "Due 8–14 Days",
-    emoji: "🟡",
-    bg: "#FFFDE7",
-    borderColor: "#FDD835",
-    headerColor: "#F57F17",
-    filter: (days) => days !== null && days >= 8 && days <= 14,
-  },
-  {
-    key: "later",
-    label: "Due 15+ Days",
-    emoji: "🟢",
-    bg: "#F1F8E9",
-    borderColor: "#66BB6A",
-    headerColor: "#2E7D32",
-    filter: (days) => days === null || days > 14,
-  },
-];
+// ─── Upcoming Deadlines – Timeline + List ───
 
 const ACTIVE_STATUSES = ["Not Started", "In Progress", "Under Review"];
 
-function DeadlineCard({ rfp, onClick }) {
+// Urgency color system for timeline markers
+function getTimelineColor(days) {
+  if (days === null) return { color: "#9E9E9E", bg: "#F5F5F5", label: "No date" };
+  if (days < 0)   return { color: "#C62828", bg: "#FFEBEE", label: "Overdue" };
+  if (days <= 3)  return { color: "#E65100", bg: "#FBE9E7", label: `${days}d left` };
+  if (days <= 7)  return { color: "#F57F17", bg: "#FFF8E1", label: `${days}d left` };
+  if (days <= 14) return { color: BRAND.tealDark, bg: "#E0F2F1", label: `${days}d left` };
+  return           { color: "#1565C0", bg: "#E3F2FD", label: `${days}d left` };
+}
+
+const TIMELINE_LEGEND = [
+  { label: "Overdue",    color: "#C62828", bg: "#FFEBEE" },
+  { label: "≤ 3 days",  color: "#E65100", bg: "#FBE9E7" },
+  { label: "≤ 7 days",  color: "#F57F17", bg: "#FFF8E1" },
+  { label: "≤ 14 days", color: BRAND.tealDark, bg: "#E0F2F1" },
+  { label: "15+ days",  color: "#1565C0", bg: "#E3F2FD" },
+  { label: "No date",   color: "#9E9E9E", bg: "#F5F5F5" },
+];
+
+// Compact card used in BOTH timeline and list views
+function DeadlineCard({ rfp, onClick, style }) {
   const [hover, setHover] = useState(false);
+  const days = getDaysUntil(rfp.dueDate);
+  const tc = getTimelineColor(days);
   const urgency = getUrgencyTag(rfp.dueDate, rfp.status);
   return (
     <div
@@ -1438,14 +1421,17 @@ function DeadlineCard({ rfp, onClick }) {
       onMouseLeave={() => setHover(false)}
       style={{
         background: hover ? BRAND.lightPurple : BRAND.white,
-        border: `1px solid ${hover ? BRAND.midPurple : BRAND.gray200}`,
+        border: `1.5px solid ${hover ? BRAND.midPurple : BRAND.gray200}`,
+        borderTop: `3px solid ${tc.color}`,
         borderRadius: 8, padding: "10px 12px", cursor: "pointer",
         transition: "all 0.18s",
-        boxShadow: hover ? "0 2px 10px rgba(74,26,107,0.08)" : "none",
+        boxShadow: hover ? "0 3px 12px rgba(74,26,107,0.1)" : "0 1px 3px rgba(0,0,0,0.04)",
+        width: 190, flexShrink: 0,
+        ...style,
       }}
     >
       <div style={{
-        fontSize: 13, fontWeight: 700, color: BRAND.deepPurple,
+        fontSize: 12, fontWeight: 800, color: BRAND.deepPurple,
         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         marginBottom: 2,
       }}>{rfp.districtName}</div>
@@ -1454,12 +1440,15 @@ function DeadlineCard({ rfp, onClick }) {
         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         marginBottom: 7,
       }}>{rfp.rfpTitle}</div>
-      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center", marginBottom: 5 }}>
         <StatusDot status={rfp.status} />
-        {urgency && <Badge bg={urgency.bg} color={urgency.color}>{urgency.label}</Badge>}
+        {urgency
+          ? <Badge bg={urgency.bg} color={urgency.color}>{urgency.label}</Badge>
+          : <Badge bg={tc.bg} color={tc.color}>No date</Badge>
+        }
       </div>
       {rfp.dueDate && (
-        <div style={{ fontSize: 11, color: BRAND.gray500, marginTop: 5, fontWeight: 500 }}>
+        <div style={{ fontSize: 10, color: BRAND.gray500, fontWeight: 500 }}>
           📅 {formatDate(rfp.dueDate)}
         </div>
       )}
@@ -1467,97 +1456,199 @@ function DeadlineCard({ rfp, onClick }) {
   );
 }
 
+// ─── Timeline View ───
+function TimelineView({ items, noDate, onCardClick }) {
+  const sorted = [...items].sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  const allItems = [...sorted, ...noDate];
+
+  return (
+    <div style={{ position: "relative", overflowX: "auto", paddingBottom: 8 }}>
+      {/* Scrollable track */}
+      <div style={{ minWidth: 600, paddingTop: 52, paddingBottom: 8, position: "relative" }}>
+
+        {/* Horizontal line */}
+        <div style={{
+          position: "absolute", top: 32, left: 0, right: 0,
+          height: 3, background: `linear-gradient(to right, ${BRAND.deepPurple}, ${BRAND.teal})`,
+          borderRadius: 99,
+        }} />
+
+        {/* Today marker */}
+        <div style={{ position: "absolute", top: 14, left: 0, display: "flex", flexDirection: "column", alignItems: "center", zIndex: 2 }}>
+          <div style={{
+            fontSize: 10, fontWeight: 800, color: BRAND.white,
+            background: BRAND.deepPurple, padding: "2px 8px", borderRadius: 10, marginBottom: 4,
+            whiteSpace: "nowrap",
+          }}>TODAY</div>
+          <div style={{ width: 3, height: 22, background: BRAND.deepPurple, borderRadius: 2 }} />
+        </div>
+
+        {/* Cards row */}
+        <div style={{ display: "flex", gap: 16, paddingLeft: 48, paddingRight: 16, alignItems: "flex-start" }}>
+          {allItems.map((rfp) => {
+            const days = getDaysUntil(rfp.dueDate);
+            const tc = getTimelineColor(days);
+            return (
+              <div key={rfp.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0 }}>
+                {/* Date marker above the line */}
+                <div style={{
+                  fontSize: 10, fontWeight: 800,
+                  color: tc.color, background: tc.bg,
+                  padding: "2px 8px", borderRadius: 10,
+                  whiteSpace: "nowrap", marginBottom: 4,
+                  border: `1px solid ${tc.color}33`,
+                }}>{rfp.dueDate ? formatDate(rfp.dueDate) : "No date"}</div>
+                {/* Tick */}
+                <div style={{ width: 2, height: 10, background: tc.color, borderRadius: 2 }} />
+                {/* Card */}
+                <DeadlineCard rfp={rfp} onClick={onCardClick} style={{ width: 190, marginTop: 6 }} />
+              </div>
+            );
+          })}
+          {allItems.length === 0 && (
+            <div style={{ fontSize: 13, color: BRAND.gray500, paddingTop: 8, paddingLeft: 8 }}>
+              No active RFPs on the timeline.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── List View ───
+function ListView({ items, noDate, onCardClick }) {
+  const sorted = [...items].sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  const allItems = [...sorted, ...noDate];
+  if (allItems.length === 0) return (
+    <div style={{ fontSize: 13, color: BRAND.gray500, padding: "12px 0" }}>No active RFPs.</div>
+  );
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {allItems.map(rfp => {
+        const days = getDaysUntil(rfp.dueDate);
+        const tc = getTimelineColor(days);
+        const urgency = getUrgencyTag(rfp.dueDate, rfp.status);
+        return (
+          <div key={rfp.id} onClick={() => onCardClick(rfp)}
+            style={{
+              display: "flex", alignItems: "center", gap: 12,
+              background: BRAND.white, border: `1px solid ${BRAND.gray200}`,
+              borderLeft: `4px solid ${tc.color}`,
+              borderRadius: 8, padding: "10px 14px", cursor: "pointer",
+              transition: "all 0.15s",
+            }}
+            onMouseEnter={e => e.currentTarget.style.borderColor = BRAND.midPurple}
+            onMouseLeave={e => e.currentTarget.style.borderColor = BRAND.gray200}
+          >
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: BRAND.deepPurple,
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {rfp.districtName}
+              </div>
+              <div style={{ fontSize: 11, color: BRAND.gray500,
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {rfp.rfpTitle}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 5, alignItems: "center", flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <StatusDot status={rfp.status} />
+              {urgency
+                ? <Badge bg={urgency.bg} color={urgency.color}>{urgency.label}</Badge>
+                : <Badge bg={tc.bg} color={tc.color}>No date</Badge>
+              }
+              {rfp.dueDate && (
+                <span style={{ fontSize: 11, color: BRAND.gray500, whiteSpace: "nowrap" }}>
+                  📅 {formatDate(rfp.dueDate)}
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── UpcomingDeadlines wrapper ───
 function UpcomingDeadlines({ rfps, onCardClick }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [viewMode, setViewMode] = useState("timeline"); // "timeline" | "list"
+
   const active = rfps.filter(r => ACTIVE_STATUSES.includes(r.status) && r.dueDate);
   const noDate = rfps.filter(r => ACTIVE_STATUSES.includes(r.status) && !r.dueDate);
+  const totalActive = active.length + noDate.length;
 
-  const laneRfps = (lane) =>
-    active
-      .filter(r => lane.filter(getDaysUntil(r.dueDate)))
-      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-
-  const totalActive = rfps.filter(r => ACTIVE_STATUSES.includes(r.status)).length;
   if (totalActive === 0) return null;
 
   return (
-    <div style={{ marginBottom: 28 }}>
-      {/* Section header */}
-      <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        marginBottom: collapsed ? 0 : 14,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 16 }}>📅</span>
-          <span style={{ fontSize: 14, fontWeight: 800, color: BRAND.deepPurple, letterSpacing: -0.2 }}>
-            Upcoming Deadlines
-          </span>
+    <div style={{
+      marginBottom: 28,
+      background: BRAND.white,
+      borderRadius: 14,
+      border: `1px solid ${BRAND.gray200}`,
+      padding: "16px 20px",
+      boxShadow: "0 1px 6px rgba(0,0,0,0.04)",
+    }}>
+      {/* Header row */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: collapsed ? 0 : 14 }}>
+        {/* Left: title + count + toggle buttons */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 14, fontWeight: 800, color: BRAND.deepPurple }}>📅 Upcoming Deadlines</span>
           <span style={{
             fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 20,
             background: BRAND.lightPurple, color: BRAND.midPurple,
           }}>{totalActive} active</span>
+
+          {/* Timeline / List toggle */}
+          {!collapsed && (
+            <div style={{
+              display: "flex", borderRadius: 8, overflow: "hidden",
+              border: `1.5px solid ${BRAND.gray200}`, flexShrink: 0,
+            }}>
+              {["timeline", "list"].map(mode => (
+                <button key={mode} onClick={() => setViewMode(mode)} style={{
+                  padding: "4px 12px", fontSize: 12, fontWeight: 700,
+                  fontFamily: "'DM Sans', sans-serif", cursor: "pointer", border: "none",
+                  background: viewMode === mode ? BRAND.deepPurple : BRAND.white,
+                  color: viewMode === mode ? BRAND.white : BRAND.gray500,
+                  transition: "all 0.15s", textTransform: "capitalize",
+                }}>{mode === "timeline" ? "📊 Timeline" : "☰ List"}</button>
+              ))}
+            </div>
+          )}
         </div>
-        <button onClick={() => setCollapsed(c => !c)} style={{
-          background: "none", border: "none", cursor: "pointer",
-          fontSize: 12, fontWeight: 600, color: BRAND.gray500,
-          display: "flex", alignItems: "center", gap: 4,
-        }}>
-          {collapsed ? "Show ▼" : "Hide ▲"}
-        </button>
+
+        {/* Right: legend + hide toggle */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          {/* Legend */}
+          {!collapsed && viewMode === "timeline" && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {TIMELINE_LEGEND.map(l => (
+                <span key={l.label} style={{
+                  fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 10,
+                  background: l.bg, color: l.color, border: `1px solid ${l.color}33`,
+                }}>{l.label}</span>
+              ))}
+            </div>
+          )}
+          <button onClick={() => setCollapsed(c => !c)} style={{
+            background: "none", border: "none", cursor: "pointer",
+            fontSize: 12, fontWeight: 600, color: BRAND.gray500,
+          }}>{collapsed ? "Show ▼" : "Hide ▲"}</button>
+        </div>
       </div>
 
+      {/* Content */}
       {!collapsed && (
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: 12,
-        }}>
-          {DEADLINE_LANES.map(lane => {
-            const items = laneRfps(lane);
-            // For "later" lane also include no-date RFPs
-            const allItems = lane.key === "later" ? [...items, ...noDate] : items;
-            return (
-              <div key={lane.key} style={{
-                background: lane.bg,
-                border: `1.5px solid ${lane.borderColor}`,
-                borderRadius: 12, padding: "12px 12px 14px",
-                minHeight: 80,
-              }}>
-                {/* Lane header */}
-                <div style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  marginBottom: 10,
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    <span style={{ fontSize: 13 }}>{lane.emoji}</span>
-                    <span style={{ fontSize: 12, fontWeight: 800, color: lane.headerColor }}>{lane.label}</span>
-                  </div>
-                  <span style={{
-                    fontSize: 11, fontWeight: 700,
-                    background: "rgba(255,255,255,0.7)", color: lane.headerColor,
-                    padding: "1px 7px", borderRadius: 20,
-                  }}>{allItems.length}</span>
-                </div>
-                {/* Cards */}
-                {allItems.length === 0 ? (
-                  <div style={{ fontSize: 11, color: "#aaa", textAlign: "center", paddingTop: 8 }}>
-                    Nothing here
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                    {allItems.map(rfp => (
-                      <DeadlineCard key={rfp.id} rfp={rfp} onClick={onCardClick} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        viewMode === "timeline"
+          ? <TimelineView items={active} noDate={noDate} onCardClick={onCardClick} />
+          : <ListView items={active} noDate={noDate} onCardClick={onCardClick} />
       )}
     </div>
   );
 }
+
 
 function SummaryCards({ rfps, activeTab }) {
   const active = rfps.filter(r => ["Not Started", "In Progress"].includes(r.status));
