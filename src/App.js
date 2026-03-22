@@ -148,6 +148,28 @@ const SUBMISSION_METHODS = [
   "Other",
 ];
 
+
+const DEFAULT_PROPOSAL_SECTIONS = [
+  { name: "Executive Summary",        status: "Not Started" },
+  { name: "Company Qualifications",   status: "Not Started" },
+  { name: "Technical Approach",       status: "Not Started" },
+  { name: "Past Performance",         status: "Not Started" },
+  { name: "Staffing Plan",            status: "Not Started" },
+  { name: "Pricing & Budget",         status: "Not Started" },
+  { name: "Compliance Forms",         status: "Not Started" },
+  { name: "Appendices & Exhibits",    status: "Not Started" },
+];
+
+const PROPOSAL_SECTION_STATUSES = ["Not Started", "In Progress", "Complete"];
+
+const PROPOSAL_SECTION_STYLE = {
+  "Not Started": { bg: "#F5F5F5", border: "#D1D1D1", color: "#888",     dot: "#D1D1D1" },
+  "In Progress":  { bg: "#EFF6FF", border: "#BFDBFE", color: "#1D4ED8",  dot: "#3B82F6" },
+  "Complete":     { bg: "#F0FDF4", border: "#BBF7D0", color: "#15803D",  dot: "#22C55E" },
+};
+
+const ACTIVE_PROPOSAL_STATUSES = ["Not Started", "In Progress"];
+
 const SUBJECT_OPTIONS = ["Math", "ELA", "Science", "Social Studies", "ESL/ELD", "Other"];
 
 const GRADE_OPTIONS = [
@@ -189,6 +211,8 @@ const INITIAL_FORM = {
   aeName: "",
   // Fit Review
   fitReview: null,
+  // Proposal sections
+  proposalSections: null,
 };
 
 function getDaysUntil(dateStr) {
@@ -867,6 +891,29 @@ function FitReviewModal({ rfp, onSave, onClose }) {
   );
 }
 
+
+// ─── Proposal Sections Bar (for RFP card) ───
+function ProposalSectionsBar({ sections }) {
+  if (!sections || sections.length === 0) return null;
+  const complete = sections.filter(s => s.status === "Complete").length;
+  const inProgress = sections.filter(s => s.status === "In Progress").length;
+  const pct = Math.round((complete / sections.length) * 100);
+  const color = pct === 100 ? "#22C55E" : inProgress > 0 ? "#3B82F6" : "#D1D1D1";
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+        <span style={{ fontSize: 11, color: "#888", fontWeight: 600 }}>Proposal Sections</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color }}>
+          {complete}/{sections.length}{pct === 100 ? " ✓" : ""}
+        </span>
+      </div>
+      <div style={{ height: 4, background: "#E8E8E8", borderRadius: 99, overflow: "hidden" }}>
+        <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 99, transition: "width 0.3s" }} />
+      </div>
+    </div>
+  );
+}
+
 // ─── Signed Docs Progress Bar (for card) ───
 function SignedDocsBar({ docs }) {
   if (!docs || docs.length === 0) return null;
@@ -1077,8 +1124,110 @@ function FitReviewSummaryBlock({ fitReviewSummary, fitReview }) {
   );
 }
 
+
+// ─── Proposal Sections Checklist (detail panel) ───
+function ProposalSectionsChecklist({ rfp, onUpdate }) {
+  const [open, setOpen] = useState(false);
+  const sections = rfp.proposalSections || DEFAULT_PROPOSAL_SECTIONS;
+  const complete = sections.filter(s => s.status === "Complete").length;
+  const inProgress = sections.filter(s => s.status === "In Progress").length;
+
+  const updateStatus = (idx, status) => {
+    const updated = sections.map((s, i) => i === idx ? { ...s, status } : s);
+    onUpdate(updated);
+  };
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      {/* Section header — clickable */}
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          cursor: "pointer", marginBottom: open ? 12 : 0,
+          borderBottom: `2px solid #F3EBF9`, paddingBottom: 6,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "#6B2D9B", letterSpacing: 1, textTransform: "uppercase" }}>
+            Proposal Sections
+          </span>
+          <span style={{
+            fontSize: 11, fontWeight: 700, padding: "1px 7px", borderRadius: 20,
+            background: complete === sections.length ? "#DCFCE7" : "#EFF6FF",
+            color: complete === sections.length ? "#15803D" : "#1D4ED8",
+          }}>{complete}/{sections.length} complete</span>
+        </div>
+        <span style={{ fontSize: 11, color: "#6B2D9B", opacity: 0.65 }}>
+          {open ? "Hide ▲" : "Show ▼"}
+        </span>
+      </div>
+
+      {open && (
+        <div>
+          {/* Progress bar */}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ height: 5, background: "#E8E8E8", borderRadius: 99, overflow: "hidden" }}>
+              <div style={{
+                width: `${Math.round((complete / sections.length) * 100)}%`,
+                height: "100%",
+                background: complete === sections.length ? "#22C55E" : inProgress > 0 ? "#3B82F6" : "#E8E8E8",
+                borderRadius: 99, transition: "width 0.3s",
+              }} />
+            </div>
+          </div>
+
+          {/* Checklist items */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {sections.map((sec, idx) => {
+              const st = PROPOSAL_SECTION_STYLE[sec.status] || PROPOSAL_SECTION_STYLE["Not Started"];
+              return (
+                <div key={sec.name} style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "9px 12px", borderRadius: 8,
+                  background: st.bg, border: `1px solid ${st.border}`,
+                  transition: "all 0.15s",
+                }}>
+                  {/* Status dot */}
+                  <div style={{
+                    width: 10, height: 10, borderRadius: "50%",
+                    background: st.dot, flexShrink: 0,
+                  }} />
+                  {/* Name */}
+                  <span style={{
+                    flex: 1, fontSize: 13, fontWeight: 600, color: st.color,
+                    textDecoration: sec.status === "Complete" ? "line-through" : "none",
+                  }}>{sec.name}</span>
+                  {/* Status dropdown */}
+                  <select
+                    value={sec.status}
+                    onChange={e => updateStatus(idx, e.target.value)}
+                    onClick={e => e.stopPropagation()}
+                    style={{
+                      padding: "3px 8px", borderRadius: 6,
+                      border: `1px solid ${st.border}`,
+                      background: st.bg, color: st.color,
+                      fontSize: 11, fontWeight: 700,
+                      fontFamily: "'DM Sans', sans-serif",
+                      cursor: "pointer", outline: "none",
+                    }}
+                  >
+                    {PROPOSAL_SECTION_STATUSES.map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── RFP Detail Panel ───
-function RFPDetail({ rfp, onClose, onEdit, onDelete, onFitReview, onMoveToActive, onArchiveNoGo }) {
+function RFPDetail({ rfp, onClose, onEdit, onDelete, onFitReview, onMoveToActive, onArchiveNoGo, onUpdateProposalSections }) {
   const urgency = getUrgencyTag(rfp.dueDate, rfp.status);
   const section = (title, children) => (
     <div style={{ marginBottom: 24 }}>
@@ -1257,6 +1406,14 @@ function RFPDetail({ rfp, onClose, onEdit, onDelete, onFitReview, onMoveToActive
             <div style={{ fontSize: 13, color: BRAND.gray700, whiteSpace: "pre-wrap", background: BRAND.gray100,
               padding: 12, borderRadius: 8, lineHeight: 1.6 }}>{rfp.notes}</div>
           ))}
+
+          {/* Proposal Sections checklist — Active RFPs only */}
+          {ACTIVE_PROPOSAL_STATUSES.includes(rfp.status) && (
+            <ProposalSectionsChecklist
+              rfp={rfp}
+              onUpdate={onUpdateProposalSections}
+            />
+          )}
 
           {/* Fit Review Section in detail panel */}
           {rfp.status === "Under Review" && (
@@ -1583,6 +1740,10 @@ function RFPCard({ rfp, onClick }) {
       )}
       {/* Signed docs progress bar */}
       <SignedDocsBar docs={rfp.requiredDocs} />
+      {/* Proposal sections bar — active statuses only */}
+      {ACTIVE_PROPOSAL_STATUSES.includes(rfp.status) && rfp.proposalSections && (
+        <ProposalSectionsBar sections={rfp.proposalSections} />
+      )}
     </div>
   );
 }
@@ -1974,6 +2135,10 @@ export default function HeyTutorRFPTracker() {
       updated = { ...form, id: Date.now().toString() };
       setRfps(prev => [...prev, updated]);
     }
+    // Auto-init proposal sections if active status and not yet set
+    if (ACTIVE_PROPOSAL_STATUSES.includes(updated.status) && !updated.proposalSections) {
+      updated = { ...updated, proposalSections: DEFAULT_PROPOSAL_SECTIONS };
+    }
     await saveRFP(updated);
     setEditing(null);
   }, [editing]);
@@ -2020,6 +2185,16 @@ export default function HeyTutorRFPTracker() {
     }));
     setView(null);
   }, []);
+
+  const handleUpdateProposalSections = useCallback(async (rfpId, sections) => {
+    setRfps(prev => prev.map(r => {
+      if (r.id !== rfpId) return r;
+      const updated = { ...r, proposalSections: sections };
+      saveRFP(updated);
+      if (view && view.id === rfpId) setView(updated);
+      return updated;
+    }));
+  }, [view]);
 
   const handleDelete = useCallback(async (id) => {
     setRfps(prev => prev.filter(r => r.id !== id));
@@ -2177,7 +2352,8 @@ export default function HeyTutorRFPTracker() {
           onEdit={() => setEditing(view)} onDelete={handleDelete}
           onFitReview={() => setFitReviewTarget(view)}
           onMoveToActive={() => handleMoveToActive(view.id)}
-          onArchiveNoGo={() => handleArchiveNoGo(view.id)} />
+          onArchiveNoGo={() => handleArchiveNoGo(view.id)}
+          onUpdateProposalSections={(sections) => handleUpdateProposalSections(view.id, sections)} />
       )}
       {fitReviewTarget && (
         <FitReviewModal rfp={fitReviewTarget}
