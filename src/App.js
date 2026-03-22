@@ -1471,21 +1471,20 @@ const ACTIVE_STATUSES = ["Not Started", "In Progress", "Under Review"];
 
 // Urgency color system for timeline markers
 function getTimelineColor(days) {
-  if (days === null) return { color: "#9E9E9E", bg: "#F5F5F5", label: "No date" };
+  if (days === null) return { color: "#9E9E9E", bg: "#F9FAFB", label: "No date" };
   if (days < 0)   return { color: "#C62828", bg: "#FFEBEE", label: "Overdue" };
-  if (days <= 3)  return { color: "#E65100", bg: "#FBE9E7", label: `${days}d left` };
-  if (days <= 7)  return { color: "#F57F17", bg: "#FFF8E1", label: `${days}d left` };
-  if (days <= 14) return { color: BRAND.tealDark, bg: "#E0F2F1", label: `${days}d left` };
-  return           { color: "#1565C0", bg: "#E3F2FD", label: `${days}d left` };
+  if (days <= 3)  return { color: "#EA580C", bg: "#FFF0EB", label: `${days}d left` };
+  if (days <= 7)  return { color: "#D97706", bg: "#FFFBEB", label: `${days}d left` };
+  if (days <= 14) return { color: "#16A34A", bg: "#F0FDF4", label: `${days}d left` };
+  return           { color: "#9CA3AF", bg: "#F9FAFB", label: "Later" };
 }
 
 const TIMELINE_LEGEND = [
   { label: "Overdue",    color: "#C62828", bg: "#FFEBEE" },
-  { label: "≤ 3 days",  color: "#E65100", bg: "#FBE9E7" },
-  { label: "≤ 7 days",  color: "#F57F17", bg: "#FFF8E1" },
-  { label: "≤ 14 days", color: BRAND.tealDark, bg: "#E0F2F1" },
-  { label: "15+ days",  color: "#1565C0", bg: "#E3F2FD" },
-  { label: "No date",   color: "#9E9E9E", bg: "#F5F5F5" },
+  { label: "\u2264 3 days",  color: "#EA580C", bg: "#FFF0EB" },
+  { label: "\u2264 7 days",  color: "#D97706", bg: "#FFFBEB" },
+  { label: "\u2264 14 days", color: "#16A34A", bg: "#F0FDF4" },
+  { label: "Later",     color: "#9CA3AF", bg: "#F9FAFB" },
 ];
 
 // Compact card used in BOTH timeline and list views
