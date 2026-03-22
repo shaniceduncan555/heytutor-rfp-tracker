@@ -67,42 +67,53 @@ const STATUS_CONFIG = {
 };
 
 
-// ─── Status card styles ───
-const STATUS_CARD_STYLE = {
+// ─── Status card token system ───
+const STATUS_CARD_STYLES = {
   "Not Started": {
-    bg: "#EFF6FF",         // light blue
-    topBorder: "#3B82F6",  // blue-500
-    hoverBorder: "#3B82F6",
+    bg: "#EFF6FF", border: "#BFDBFE", topBorder: "#3B82F6",
+    text: "#1E3A5F", subtleText: "#3B82F6",
+    pillBg: "#DBEAFE", pillText: "#1D4ED8", hoverBorder: "#3B82F6",
   },
   "In Progress": {
-    bg: "#FEFCE8",         // light yellow
-    topBorder: "#EAB308",  // yellow-500
-    hoverBorder: "#6B2D9B",
+    bg: "#FEFCE8", border: "#FEF08A", topBorder: "#EAB308",
+    text: "#4A3800", subtleText: "#A16207",
+    pillBg: "#FEF9C3", pillText: "#854D0E", hoverBorder: "#EAB308",
   },
   "Under Review": {
-    bg: "#FFF7ED",         // light orange
-    topBorder: "#F97316",  // orange-500
-    hoverBorder: "#F97316",
+    bg: "#FFF7ED", border: "#FED7AA", topBorder: "#F97316",
+    text: "#4A1A00", subtleText: "#C2410C",
+    pillBg: "#FFEDD5", pillText: "#9A3412", hoverBorder: "#F97316",
   },
   "Submitted": {
-    bg: "#FAFAFA",         // near-white
-    topBorder: "#D1D5DB",  // gray-300
-    hoverBorder: "#6B2D9B",
+    bg: "#F9FAFB", border: "#E5E7EB", topBorder: "#9CA3AF",
+    text: "#111827", subtleText: "#6B7280",
+    pillBg: "#F3F4F6", pillText: "#374151", hoverBorder: "#6B2D9B",
   },
   "Won": {
-    bg: "#F0FDF4",         // light green
-    topBorder: "#22C55E",  // green-500
-    hoverBorder: "#22C55E",
+    bg: "#F0FDF4", border: "#BBF7D0", topBorder: "#22C55E",
+    text: "#052E16", subtleText: "#16A34A",
+    pillBg: "#DCFCE7", pillText: "#15803D", hoverBorder: "#22C55E",
   },
   "Lost": {
-    bg: "#FFF1F2",         // light red
-    topBorder: "#F43F5E",  // rose-500
-    hoverBorder: "#F43F5E",
+    bg: "#FFF1F2", border: "#FECDD3", topBorder: "#F43F5E",
+    text: "#4C0519", subtleText: "#BE123C",
+    pillBg: "#FFE4E6", pillText: "#9F1239", hoverBorder: "#F43F5E",
+  },
+  "No-Go": {
+    bg: "#FFF1F2", border: "#FECDD3", topBorder: "#FB7185",
+    text: "#4C0519", subtleText: "#BE123C",
+    pillBg: "#FFE4E6", pillText: "#9F1239", hoverBorder: "#F43F5E",
   },
 };
 
+const STATUS_CARD_STYLES_FALLBACK = {
+  bg: "#FFFFFF", border: "#E5E7EB", topBorder: "#9CA3AF",
+  text: "#111827", subtleText: "#6B7280",
+  pillBg: "#F3F4F6", pillText: "#374151", hoverBorder: "#6B2D9B",
+};
+
 function getCardStyle(status) {
-  return STATUS_CARD_STYLE[status] || { bg: BRAND.white, topBorder: BRAND.gray300, hoverBorder: BRAND.midPurple };
+  return STATUS_CARD_STYLES[status] || STATUS_CARD_STYLES_FALLBACK;
 }
 
 const SERVICE_TYPES = [
@@ -1353,18 +1364,18 @@ function RFPCard({ rfp, onClick }) {
         background: cs.bg,
         borderRadius: 12, padding: "18px 20px",
         cursor: "pointer", transition: "all 0.2s",
-        border: `1px solid ${hover ? cs.hoverBorder : BRAND.gray200}`,
+        border: `1px solid ${hover ? cs.hoverBorder : cs.border}`,
         borderTop: `3px solid ${cs.topBorder}`,
         boxShadow: hover ? "0 4px 20px rgba(74,26,107,0.1)" : "0 1px 4px rgba(0,0,0,0.04)",
         transform: hover ? "translateY(-1px)" : "none",
       }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: BRAND.deepPurple, marginBottom: 2,
+          <div style={{ fontSize: 16, fontWeight: 700, color: cs.text, marginBottom: 2,
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{rfp.districtName}</div>
-          <div style={{ fontSize: 13, color: BRAND.gray500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{rfp.rfpTitle}</div>
+          <div style={{ fontSize: 13, color: cs.subtleText, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{rfp.rfpTitle}</div>
         </div>
-        {rfp.state && <Badge bg={BRAND.lightPurple} color={BRAND.midPurple} style={{ marginLeft: 8 }}>{rfp.state}</Badge>}
+        {rfp.state && <Badge bg={cs.pillBg} color={cs.pillText} style={{ marginLeft: 8 }}>{rfp.state}</Badge>}
       </div>
 
       {scopeLabel && (
@@ -1456,15 +1467,16 @@ function DeadlineCard({ rfp, onClick, style }) {
   const days = getDaysUntil(rfp.dueDate);
   const tc = getTimelineColor(days);
   const urgency = getUrgencyTag(rfp.dueDate, rfp.status);
+  const cs = getCardStyle(rfp.status);
   return (
     <div
       onClick={() => onClick(rfp)}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
-        background: hover ? getCardStyle(rfp.status).bg : getCardStyle(rfp.status).bg,
-        border: `1.5px solid ${hover ? getCardStyle(rfp.status).hoverBorder : BRAND.gray200}`,
-        borderTop: `3px solid ${getCardStyle(rfp.status).topBorder}`,
+        background: cs.bg,
+        border: `1.5px solid ${hover ? cs.hoverBorder : cs.border}`,
+        borderTop: `3px solid ${cs.topBorder}`,
         borderRadius: 8, padding: "10px 12px", cursor: "pointer",
         transition: "all 0.18s",
         boxShadow: hover ? "0 3px 12px rgba(74,26,107,0.1)" : "0 1px 3px rgba(0,0,0,0.04)",
@@ -1473,12 +1485,12 @@ function DeadlineCard({ rfp, onClick, style }) {
       }}
     >
       <div style={{
-        fontSize: 12, fontWeight: 800, color: BRAND.deepPurple,
+        fontSize: 12, fontWeight: 800, color: cs.text,
         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         marginBottom: 2,
       }}>{rfp.districtName}</div>
       <div style={{
-        fontSize: 11, color: BRAND.gray500,
+        fontSize: 11, color: cs.subtleText,
         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         marginBottom: 7,
       }}>{rfp.rfpTitle}</div>
@@ -1576,7 +1588,7 @@ function ListView({ items, noDate, onCardClick }) {
             style={{
               display: "flex", alignItems: "center", gap: 12,
               background: BRAND.white, border: `1px solid ${BRAND.gray200}`,
-              borderLeft: `4px solid ${getCardStyle(rfp.status).topBorder}`,
+              borderLeft: `4px solid ${getCardStyle(rfp.status).topBorder}`, background: getCardStyle(rfp.status).bg,
               borderRadius: 8, padding: "10px 14px", cursor: "pointer",
               transition: "all 0.15s",
             }}
@@ -1584,11 +1596,11 @@ function ListView({ items, noDate, onCardClick }) {
             onMouseLeave={e => e.currentTarget.style.borderColor = BRAND.gray200}
           >
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: BRAND.deepPurple,
+              <div style={{ fontSize: 13, fontWeight: 700, color: getCardStyle(rfp.status).text,
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {rfp.districtName}
               </div>
-              <div style={{ fontSize: 11, color: BRAND.gray500,
+              <div style={{ fontSize: 11, color: getCardStyle(rfp.status).subtleText,
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {rfp.rfpTitle}
               </div>
