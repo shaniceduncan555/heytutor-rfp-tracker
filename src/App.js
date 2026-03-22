@@ -868,6 +868,9 @@ function SignedDocsBar({ docs }) {
 function FitReviewSummaryBlock({ fitReviewSummary, fitReview }) {
   if (!fitReviewSummary?.recommendation) return null;
 
+  const [expanded, setExpanded] = useState(false);
+  const [showDetail, setShowDetail] = useState(false);
+
   const { totalScore, maxScore, percentage, fitLabel, recommendation, reviewerName, reviewDate } = fitReviewSummary;
 
   const COLOR_MAP = {
@@ -879,69 +882,167 @@ function FitReviewSummaryBlock({ fitReviewSummary, fitReview }) {
 
   const style = COLOR_MAP[fitLabel] || COLOR_MAP["No-Go"];
   const rec = RECOMMENDATION_CONFIG[recommendation] || {};
+  const rfCount = calcRedFlagCount(fitReview?.redFlags);
   const dateStr = reviewDate
     ? new Date(reviewDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : "";
 
   return (
     <div style={{
-      marginBottom: 20,
-      borderRadius: 10,
+      marginBottom: 20, borderRadius: 10,
       border: `1.5px solid ${style.border}`,
-      background: style.bg,
-      padding: "12px 16px",
-      display: "flex", flexDirection: "column", gap: 8,
+      background: style.bg, overflow: "hidden",
     }}>
-      {/* Score row */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {/* Score pill */}
-          <span style={{
-            fontSize: 15, fontWeight: 800, color: style.color,
-            background: "rgba(255,255,255,0.7)", padding: "3px 12px",
-            borderRadius: 20, border: `1px solid ${style.border}`,
-          }}>
-            {totalScore}/{maxScore}
-          </span>
-          {/* Fit label */}
-          <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+      {/* ── Collapsed summary (always visible) ── */}
+      <div
+        onClick={() => setExpanded(e => !e)}
+        style={{ padding: "12px 16px", cursor: "pointer", display: "flex", flexDirection: "column", gap: 8 }}
+      >
+        {/* Score row */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span style={{
-              width: 8, height: 8, borderRadius: "50%",
-              background: style.dot, display: "inline-block", flexShrink: 0,
-            }} />
-            <span style={{ fontSize: 13, fontWeight: 700, color: style.color }}>{fitLabel}</span>
-          </span>
+              fontSize: 15, fontWeight: 800, color: style.color,
+              background: "rgba(255,255,255,0.7)", padding: "3px 12px",
+              borderRadius: 20, border: `1px solid ${style.border}`,
+            }}>{totalScore}/{maxScore}</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: style.dot, display: "inline-block" }} />
+              <span style={{ fontSize: 13, fontWeight: 700, color: style.color }}>{fitLabel}</span>
+            </span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {recommendation && (
+              <span style={{
+                fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
+                background: rec.bg || style.bg, color: rec.color || style.color,
+                border: `1px solid ${rec.border || style.border}`,
+              }}>{rec.emoji} {recommendation}</span>
+            )}
+            <span style={{ fontSize: 11, color: style.color, opacity: 0.65, whiteSpace: "nowrap" }}>
+              {expanded ? "Hide ▲" : "View breakdown ▼"}
+            </span>
+          </div>
         </div>
-        {/* Recommendation chip */}
-        {recommendation && (
-          <span style={{
-            fontSize: 12, fontWeight: 700,
-            padding: "3px 10px", borderRadius: 20,
-            background: rec.bg || style.bg,
-            color: rec.color || style.color,
-            border: `1px solid ${rec.border || style.border}`,
-          }}>{rec.emoji} {recommendation}</span>
+
+        {/* Score bar */}
+        <div style={{ height: 5, background: "rgba(0,0,0,0.08)", borderRadius: 99, overflow: "hidden" }}>
+          <div style={{ width: `${percentage}%`, height: "100%", background: style.dot, borderRadius: 99, transition: "width 0.4s ease" }} />
+        </div>
+
+        {/* Reviewer row */}
+        {(reviewerName || dateStr) && (
+          <div style={{ fontSize: 11, color: style.color, opacity: 0.75 }}>
+            {reviewerName && <span>Reviewed by <strong>{reviewerName}</strong></span>}
+            {reviewerName && dateStr && <span> · </span>}
+            {dateStr && <span>{dateStr}</span>}
+            {fitReview?.keyConcerns && (
+              <span style={{ display: "block", marginTop: 2, fontStyle: "italic" }}>⚑ {fitReview.keyConcerns}</span>
+            )}
+          </div>
         )}
       </div>
 
-      {/* Score bar */}
-      <div style={{ height: 5, background: "rgba(0,0,0,0.08)", borderRadius: 99, overflow: "hidden" }}>
+      {/* ── Expanded breakdown ── */}
+      {expanded && (
         <div style={{
-          width: `${percentage}%`, height: "100%",
-          background: style.dot, borderRadius: 99, transition: "width 0.4s ease",
-        }} />
-      </div>
+          borderTop: `1px solid ${style.border}`,
+          background: "rgba(255,255,255,0.55)",
+          padding: "14px 16px",
+        }}>
+          {/* Meta row */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+            {[
+              { label: "Reviewer", value: reviewerName || "—" },
+              { label: "Review Date", value: dateStr || "—" },
+              { label: "Recommendation", value: `${rec.emoji || ""} ${recommendation}` },
+              { label: "Red Flags", value: rfCount === 0 ? "None" : `⚑ ${rfCount} flagged` },
+            ].map(m => (
+              <div key={m.label} style={{
+                background: "rgba(255,255,255,0.7)", borderRadius: 7, padding: "8px 10px",
+                border: `1px solid ${style.border}`,
+              }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: style.color, opacity: 0.65,
+                  textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 2 }}>{m.label}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: style.color }}>{m.value}</div>
+              </div>
+            ))}
+          </div>
 
-      {/* Reviewer row */}
-      {(reviewerName || dateStr) && (
-        <div style={{ fontSize: 11, color: style.color, opacity: 0.8 }}>
-          {reviewerName && <span>Reviewed by <strong>{reviewerName}</strong></span>}
-          {reviewerName && dateStr && <span> · </span>}
-          {dateStr && <span>{dateStr}</span>}
-          {fitReview?.keyConcerns && (
-            <span style={{ display: "block", marginTop: 3, fontStyle: "italic", opacity: 0.9 }}>
-              ⚑ {fitReview.keyConcerns}
-            </span>
+          {/* Section subtotals */}
+          <div style={{ fontSize: 11, fontWeight: 700, color: style.color, opacity: 0.7,
+            textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Section Scores</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+            {FIT_SECTIONS.map(sec => {
+              const secScore = sec.questions.reduce((s, q) => s + (fitReview?.scores?.[q.key] || 0), 0);
+              const pct = Math.round((secScore / sec.maxScore) * 100);
+              const barColor = pct >= 80 ? "#43A047" : pct >= 55 ? "#F9A825" : "#E53935";
+              return (
+                <div key={sec.key} style={{ background: "rgba(255,255,255,0.7)", borderRadius: 7,
+                  padding: "8px 12px", border: `1px solid ${style.border}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: style.color }}>{sec.label}</span>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: barColor }}>{secScore}/{sec.maxScore}</span>
+                  </div>
+                  <div style={{ height: 4, background: "rgba(0,0,0,0.1)", borderRadius: 99, overflow: "hidden" }}>
+                    <div style={{ width: `${pct}%`, height: "100%", background: barColor, borderRadius: 99, transition: "width 0.3s" }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Toggle detailed scoring */}
+          <button
+            onClick={e => { e.stopPropagation(); setShowDetail(d => !d); }}
+            style={{
+              background: "none", border: `1px solid ${style.border}`, borderRadius: 7,
+              padding: "6px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer",
+              color: style.color, fontFamily: "'DM Sans', sans-serif",
+              width: "100%", marginBottom: showDetail ? 12 : 0,
+            }}
+          >
+            {showDetail ? "Hide detailed scoring ▲" : "Show detailed scoring ▼"}
+          </button>
+
+          {/* Per-question detail */}
+          {showDetail && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {FIT_SECTIONS.map(sec => (
+                <div key={sec.key}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: style.color,
+                    textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 5, opacity: 0.7 }}>
+                    {sec.label}
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    {sec.questions.map(q => {
+                      const score = fitReview?.scores?.[q.key] || 0;
+                      const qPct = Math.round((score / 5) * 100);
+                      const qColor = qPct >= 80 ? "#43A047" : qPct >= 55 ? "#F9A825" : "#E53935";
+                      return (
+                        <div key={q.key} style={{
+                          display: "flex", alignItems: "center", justifyContent: "space-between",
+                          background: "rgba(255,255,255,0.65)", borderRadius: 6,
+                          padding: "7px 10px", border: `1px solid ${style.border}`,
+                          gap: 10,
+                        }}>
+                          <span style={{ fontSize: 11, color: style.color, flex: 1, lineHeight: 1.3 }}>{q.label}</span>
+                          <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
+                            {[1,2,3,4,5].map(n => (
+                              <div key={n} style={{
+                                width: 14, height: 14, borderRadius: 3,
+                                background: n <= score ? qColor : "rgba(0,0,0,0.08)",
+                              }} />
+                            ))}
+                          </div>
+                          <span style={{ fontSize: 12, fontWeight: 800, color: qColor, minWidth: 18, textAlign: "right" }}>{score}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}
