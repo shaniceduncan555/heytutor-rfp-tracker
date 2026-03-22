@@ -131,6 +131,23 @@ const US_STATES = [
   "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","PR",
 ];
 
+
+const SUBMISSION_METHODS = [
+  "",
+  "Online Portal",
+  "Email",
+  "Mail / Hard Copy",
+  "Hand Delivery",
+  "BidNet",
+  "Bonfire",
+  "Ion Wave",
+  "OpenGov",
+  "Vendor Registry",
+  "Jaggaer",
+  "Euna Procurement",
+  "Other",
+];
+
 const SUBJECT_OPTIONS = ["Math", "ELA", "Science", "Social Studies", "ESL/ELD", "Other"];
 
 const GRADE_OPTIONS = [
@@ -150,6 +167,7 @@ const INITIAL_FORM = {
   contactPhone: "",
   contactRole: "",
   submissionMethod: "",
+  submissionMethodOther: "",
   submissionUrl: "",
   submissionNotes: "",
   guidelines: "",
@@ -1326,6 +1344,7 @@ function RFPForm({ rfp, onSave, onClose }) {
     requiredDocs: Array.isArray(rfp?.requiredDocs) ? rfp.requiredDocs : [],
     aeRequired: rfp?.aeRequired || false,
     aeName: rfp?.aeName || "",
+    submissionMethodOther: rfp?.submissionMethodOther || (!SUBMISSION_METHODS.includes(rfp?.submissionMethod || "") && rfp?.submissionMethod ? rfp.submissionMethod : ""),
   }));
   const set = (key) => (e) => setForm(f => ({ ...f, [key]: e.target.value }));
   const valid = form.districtName && form.rfpTitle;
@@ -1408,7 +1427,34 @@ function RFPForm({ rfp, onSave, onClose }) {
             <Input label="Due Time" value={form.dueTime} onChange={set("dueTime")} placeholder="e.g. 2:00 PM EST" />
           </div>
           <div style={{ ...grid2, marginTop: 14 }}>
-            <Input label="Submission Method" value={form.submissionMethod} onChange={set("submissionMethod")} placeholder="e.g. Email, Portal, Mail" />
+            <div>
+              <Select
+                label="Submission Method"
+                value={SUBMISSION_METHODS.includes(form.submissionMethod) ? form.submissionMethod : (form.submissionMethod ? "Other" : "")}
+                onChange={e => {
+                  const val = e.target.value;
+                  if (val === "Other") {
+                    setForm(f => ({ ...f, submissionMethod: f.submissionMethodOther || "Other" }));
+                  } else {
+                    setForm(f => ({ ...f, submissionMethod: val, submissionMethodOther: "" }));
+                  }
+                }}
+                options={SUBMISSION_METHODS}
+              />
+              {(form.submissionMethod === "Other" || (!SUBMISSION_METHODS.includes(form.submissionMethod) && form.submissionMethod)) && (
+                <input
+                  value={form.submissionMethodOther || (SUBMISSION_METHODS.includes(form.submissionMethod) ? "" : form.submissionMethod)}
+                  onChange={e => setForm(f => ({ ...f, submissionMethod: e.target.value || "Other", submissionMethodOther: e.target.value }))}
+                  placeholder="Describe submission method..."
+                  style={{
+                    marginTop: 6, width: "100%", padding: "8px 12px",
+                    borderRadius: 8, border: `1px solid ${BRAND.gray300}`,
+                    fontSize: 13, fontFamily: "'DM Sans', sans-serif",
+                    outline: "none", boxSizing: "border-box",
+                  }}
+                />
+              )}
+            </div>
             <Input label="Submission URL / Portal" value={form.submissionUrl} onChange={set("submissionUrl")} placeholder="https://..." />
           </div>
           <Input label="Submission Notes" value={form.submissionNotes} onChange={set("submissionNotes")} placeholder="e.g. Must include 3 hard copies" textarea style={{ marginTop: 14 }} />
