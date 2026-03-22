@@ -122,6 +122,15 @@ const SERVICE_TYPES = [
   "Virtual Tutoring", "In-Person Tutoring", "Hybrid Tutoring", "Other",
 ];
 
+
+const US_STATES = [
+  "", "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA",
+  "HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
+  "MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
+  "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
+  "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","PR",
+];
+
 const SUBJECT_OPTIONS = ["Math", "ELA", "Science", "Social Studies", "ESL/ELD", "Other"];
 
 const GRADE_OPTIONS = [
@@ -1348,7 +1357,7 @@ function RFPForm({ rfp, onSave, onClose }) {
             <Input label="RFP Title" value={form.rfpTitle} onChange={set("rfpTitle")} placeholder="e.g. K-8 Tutoring Services" required />
           </div>
           <div style={{ ...grid2, marginTop: 14 }}>
-            <Input label="State" value={form.state} onChange={set("state")} placeholder="e.g. CA" />
+            <Select label="State" value={form.state} onChange={set("state")} options={US_STATES} />
             <Select label="Status" value={form.status} onChange={set("status")} options={Object.keys(STATUS_CONFIG)} />
           </div>
           <div style={{ ...grid2, marginTop: 14 }}>
