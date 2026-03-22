@@ -66,6 +66,45 @@ const STATUS_CONFIG = {
   "Lost": { bg: "#FFEBEE", text: "#C62828", dot: BRAND.red },
 };
 
+
+// ─── Status card styles ───
+const STATUS_CARD_STYLE = {
+  "Not Started": {
+    bg: "#EFF6FF",         // light blue
+    topBorder: "#3B82F6",  // blue-500
+    hoverBorder: "#3B82F6",
+  },
+  "In Progress": {
+    bg: "#FEFCE8",         // light yellow
+    topBorder: "#EAB308",  // yellow-500
+    hoverBorder: "#6B2D9B",
+  },
+  "Under Review": {
+    bg: "#FFF7ED",         // light orange
+    topBorder: "#F97316",  // orange-500
+    hoverBorder: "#F97316",
+  },
+  "Submitted": {
+    bg: "#FAFAFA",         // near-white
+    topBorder: "#D1D5DB",  // gray-300
+    hoverBorder: "#6B2D9B",
+  },
+  "Won": {
+    bg: "#F0FDF4",         // light green
+    topBorder: "#22C55E",  // green-500
+    hoverBorder: "#22C55E",
+  },
+  "Lost": {
+    bg: "#FFF1F2",         // light red
+    topBorder: "#F43F5E",  // rose-500
+    hoverBorder: "#F43F5E",
+  },
+};
+
+function getCardStyle(status) {
+  return STATUS_CARD_STYLE[status] || { bg: BRAND.white, topBorder: BRAND.gray300, hoverBorder: BRAND.midPurple };
+}
+
 const SERVICE_TYPES = [
   "", "High-Dosage Tutoring", "Supplemental Tutoring", "After-School Tutoring",
   "ELOP (Expanded Learning)", "Summer Learning Program", "Intervention Services",
@@ -1306,13 +1345,16 @@ function RFPCard({ rfp, onClick }) {
   const [hover, setHover] = useState(false);
   const scopeLabel = [rfp.serviceType, rfp.subjects?.length ? rfp.subjects.join(", ") : ""].filter(Boolean).join(" · ");
 
+  const cs = getCardStyle(rfp.status);
   return (
     <div onClick={onClick}
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
       style={{
-        background: BRAND.white, borderRadius: 12, padding: "18px 20px",
+        background: cs.bg,
+        borderRadius: 12, padding: "18px 20px",
         cursor: "pointer", transition: "all 0.2s",
-        border: `1px solid ${hover ? BRAND.midPurple : BRAND.gray200}`,
+        border: `1px solid ${hover ? cs.hoverBorder : BRAND.gray200}`,
+        borderTop: `3px solid ${cs.topBorder}`,
         boxShadow: hover ? "0 4px 20px rgba(74,26,107,0.1)" : "0 1px 4px rgba(0,0,0,0.04)",
         transform: hover ? "translateY(-1px)" : "none",
       }}>
@@ -1420,9 +1462,9 @@ function DeadlineCard({ rfp, onClick, style }) {
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
-        background: hover ? BRAND.lightPurple : BRAND.white,
-        border: `1.5px solid ${hover ? BRAND.midPurple : BRAND.gray200}`,
-        borderTop: `3px solid ${tc.color}`,
+        background: hover ? getCardStyle(rfp.status).bg : getCardStyle(rfp.status).bg,
+        border: `1.5px solid ${hover ? getCardStyle(rfp.status).hoverBorder : BRAND.gray200}`,
+        borderTop: `3px solid ${getCardStyle(rfp.status).topBorder}`,
         borderRadius: 8, padding: "10px 12px", cursor: "pointer",
         transition: "all 0.18s",
         boxShadow: hover ? "0 3px 12px rgba(74,26,107,0.1)" : "0 1px 3px rgba(0,0,0,0.04)",
@@ -1534,7 +1576,7 @@ function ListView({ items, noDate, onCardClick }) {
             style={{
               display: "flex", alignItems: "center", gap: 12,
               background: BRAND.white, border: `1px solid ${BRAND.gray200}`,
-              borderLeft: `4px solid ${tc.color}`,
+              borderLeft: `4px solid ${getCardStyle(rfp.status).topBorder}`,
               borderRadius: 8, padding: "10px 14px", cursor: "pointer",
               transition: "all 0.15s",
             }}
