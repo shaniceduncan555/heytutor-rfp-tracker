@@ -1433,9 +1433,36 @@ function RFPCard({ rfp, onClick }) {
 
 // ─── Tab definitions ───
 const TABS = [
-  { key: "active", label: "Active RFPs", statuses: ["Not Started", "In Progress"] },
-  { key: "review", label: "Under Review", statuses: ["Under Review"] },
-  { key: "archive", label: "Submitted Archive", statuses: ["Submitted", "Won", "Lost"] },
+  {
+    key: "active",
+    label: "Active RFPs",
+    statuses: ["Not Started", "In Progress"],
+    activeColor:   "#1D4ED8",   // blue-700
+    activeBg:      "#EFF6FF",   // blue-50
+    activePill:    "#DBEAFE",   // blue-100
+    activePillText:"#1D4ED8",
+    underline:     "#3B82F6",   // blue-500
+  },
+  {
+    key: "review",
+    label: "Under Review",
+    statuses: ["Under Review"],
+    activeColor:   "#9A3412",   // orange-800
+    activeBg:      "#FFF7ED",   // orange-50
+    activePill:    "#FFEDD5",   // orange-100
+    activePillText:"#9A3412",
+    underline:     "#F97316",   // orange-500
+  },
+  {
+    key: "archive",
+    label: "Submitted Archive",
+    statuses: ["Submitted", "Won", "Lost"],
+    activeColor:   "#374151",   // gray-700
+    activeBg:      "#F9FAFB",   // gray-50
+    activePill:    "#F3F4F6",   // gray-100
+    activePillText:"#374151",
+    underline:     "#9CA3AF",   // gray-400
+  },
 ];
 
 // ─── Upcoming Deadlines – Timeline + List ───
@@ -1704,6 +1731,18 @@ function UpcomingDeadlines({ rfps, onCardClick }) {
 }
 
 
+// Summary card token map — one color role per concept
+const SUMMARY_TOKENS = {
+  "Active RFPs":  { bg: "#EFF6FF", border: "#3B82F6", number: "#1D4ED8", label: "#3B82F6" },
+  "In Progress":  { bg: "#FEFCE8", border: "#EAB308", number: "#854D0E", label: "#A16207" },
+  "Under Review": { bg: "#FFF7ED", border: "#F97316", number: "#9A3412", label: "#C2410C" },
+  "Due ≤ 7 Days": { bg: "#FEFCE8", border: "#EAB308", number: "#854D0E", label: "#A16207" },
+  "Overdue":      { bg: "#FFF1F2", border: "#F43F5E", number: "#9F1239", label: "#BE123C" },
+  "Won":          { bg: "#F0FDF4", border: "#22C55E", number: "#15803D", label: "#16A34A" },
+  "Submitted":    { bg: "#F9FAFB", border: "#9CA3AF", number: "#374151", label: "#6B7280" },
+  "Lost":         { bg: "#FFF1F2", border: "#F43F5E", number: "#9F1239", label: "#BE123C" },
+};
+
 function SummaryCards({ rfps, activeTab }) {
   const active = rfps.filter(r => ["Not Started", "In Progress"].includes(r.status));
   const review = rfps.filter(r => r.status === "Under Review");
@@ -1714,22 +1753,22 @@ function SummaryCards({ rfps, activeTab }) {
 
   const cardsByTab = {
     active: [
-      { label: "Active RFPs", value: active.length, color: BRAND.midPurple, bg: "#EDE7F6" },
-      { label: "Due ≤ 7 Days", value: dueSoon, color: "#E65100", bg: "#FFF8E1" },
-      { label: "Overdue", value: overdue, color: BRAND.red, bg: "#FFEBEE" },
-      { label: "Won", value: won, color: BRAND.teal, bg: "#E0F2F1" },
+      { label: "Active RFPs",  value: active.length,                                                                                            token: "Active RFPs"  },
+      { label: "Due ≤ 7 Days", value: dueSoon,                                                                                                   token: "Due ≤ 7 Days" },
+      { label: "Overdue",      value: overdue,                                                                                                   token: "Overdue"      },
+      { label: "Won",          value: won,                                                                                                       token: "Won"          },
     ],
     review: [
-      { label: "Under Review", value: review.length, color: "#E65100", bg: "#FFF8E1" },
-      { label: "Due ≤ 7 Days", value: review.filter(r => { const d = getDaysUntil(r.dueDate); return d !== null && d >= 0 && d <= 7; }).length, color: BRAND.red, bg: "#FFEBEE" },
-      { label: "Active RFPs", value: active.length, color: BRAND.midPurple, bg: "#EDE7F6" },
-      { label: "Won", value: won, color: BRAND.teal, bg: "#E0F2F1" },
+      { label: "Under Review", value: review.length,                                                                                            token: "Under Review" },
+      { label: "Due ≤ 7 Days", value: review.filter(r => { const d = getDaysUntil(r.dueDate); return d !== null && d >= 0 && d <= 7; }).length, token: "Due ≤ 7 Days" },
+      { label: "Active RFPs",  value: active.length,                                                                                            token: "Active RFPs"  },
+      { label: "Won",          value: won,                                                                                                       token: "Won"          },
     ],
     archive: [
-      { label: "Submitted", value: submitted, color: BRAND.green, bg: "#E8F5E9" },
-      { label: "Won", value: won, color: BRAND.teal, bg: "#E0F2F1" },
-      { label: "Lost", value: rfps.filter(r => r.status === "Lost").length, color: BRAND.red, bg: "#FFEBEE" },
-      { label: "Active RFPs", value: active.length, color: BRAND.midPurple, bg: "#EDE7F6" },
+      { label: "Submitted",    value: submitted,                                                                                                 token: "Submitted"    },
+      { label: "Won",          value: won,                                                                                                       token: "Won"          },
+      { label: "Lost",         value: rfps.filter(r => r.status === "Lost").length,                                                             token: "Lost"         },
+      { label: "Active RFPs",  value: active.length,                                                                                            token: "Active RFPs"  },
     ],
   };
 
@@ -1737,12 +1776,19 @@ function SummaryCards({ rfps, activeTab }) {
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 24 }}>
-      {cards.map(c => (
-        <div key={c.label} style={{ background: c.bg, borderRadius: 12, padding: "16px 18px", borderLeft: `4px solid ${c.color}` }}>
-          <div style={{ fontSize: 28, fontWeight: 800, color: c.color, lineHeight: 1 }}>{c.value}</div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: c.color, marginTop: 4, opacity: 0.8 }}>{c.label}</div>
-        </div>
-      ))}
+      {cards.map(c => {
+        const t = SUMMARY_TOKENS[c.token] || SUMMARY_TOKENS["Active RFPs"];
+        return (
+          <div key={c.label} style={{
+            background: t.bg, borderRadius: 12, padding: "16px 18px",
+            borderLeft: `4px solid ${t.border}`,
+            boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+          }}>
+            <div style={{ fontSize: 30, fontWeight: 800, color: t.number, lineHeight: 1 }}>{c.value}</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: t.label, marginTop: 5, letterSpacing: 0.2 }}>{c.label}</div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -1879,27 +1925,31 @@ export default function HeyTutorRFPTracker() {
 
         {/* Tabs */}
         <div style={{
-          display: "flex", gap: 4, marginBottom: 20,
+          display: "flex", gap: 0, marginBottom: 20,
           borderBottom: `2px solid ${BRAND.gray200}`,
         }}>
           {TABS.map(tab => {
             const isActive = activeTab === tab.key;
             const count = rfps.filter(r => tab.statuses.includes(r.status)).length;
             return (
-              <button key={tab.key} onClick={() => { setActiveTab(tab.key); setSearch(""); setArchiveFilter("All"); }}
+              <button key={tab.key}
+                onClick={() => { setActiveTab(tab.key); setSearch(""); setArchiveFilter("All"); }}
                 style={{
                   padding: "10px 20px", border: "none", cursor: "pointer",
-                  fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 700,
-                  background: "transparent", transition: "all 0.2s",
-                  color: isActive ? BRAND.deepPurple : BRAND.gray500,
-                  borderBottom: isActive ? `3px solid ${BRAND.deepPurple}` : "3px solid transparent",
-                  marginBottom: -2, display: "flex", alignItems: "center", gap: 8,
+                  fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 700,
+                  transition: "all 0.18s", marginBottom: -2,
+                  display: "flex", alignItems: "center", gap: 7,
+                  background: isActive ? tab.activeBg : "transparent",
+                  color: isActive ? tab.activeColor : BRAND.gray500,
+                  borderBottom: isActive ? `3px solid ${tab.underline}` : "3px solid transparent",
+                  borderRadius: isActive ? "8px 8px 0 0" : 0,
                 }}>
                 {tab.label}
                 <span style={{
                   fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 20,
-                  background: isActive ? BRAND.lightPurple : BRAND.gray200,
-                  color: isActive ? BRAND.midPurple : BRAND.gray500,
+                  background: isActive ? tab.activePill : BRAND.gray200,
+                  color: isActive ? tab.activePillText : BRAND.gray500,
+                  transition: "all 0.18s",
                 }}>{count}</span>
               </button>
             );
